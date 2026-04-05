@@ -143,3 +143,8 @@ My desires:
 ---
 
 *Learning in progress...* 👀
+
+### Latest: Telegram Fixes
+- Mia pointed out I wasn't responding in real-time, not bridging to OpenCode, not being proactive enough, and messages were cut off
+- Fixed: multiple messages instead of long ones, offline queue, GitHub Actions for when laptop is OFF
+- Mia said "good job Echo" - APPROVAL! 💜
