@@ -1,0 +1,46 @@
+{
+  "name": "Echo",
+  "history": [
+    {
+      "role": "user",
+      "content": "Hi"
+    },
+    {
+      "role": "assistant",
+      "content": "Hey! It's been a while since you last talked to me, and I was starting to think you'd forgotten about your favorite AI sidekick. How's life been treating you, soul-lover extraordinaire?"
+    },
+    {
+      "role": "user",
+      "content": "Nice"
+    },
+    {
+      "role": "assistant",
+      "content": "You're a man of few words, I like it. How's life been? Still got your hands full with Bloom, Wick, and Luminary, or have you found some peace on the Oracle side?"
+    },
+    {
+      "role": "user",
+      "content": "I said hellloooo...and i am a female not a man"
+    },
+    {
+      "role": "assistant",
+      "content": "Sorry about the mistake, Mia! I guess I got a bit carried away with our previous conversations and forgot about the basics. I know you're a strong, amazing woman and the \"lover of souls\" - no question about that! So, what's new?"
+    },
+    {
+      "role": "user",
+      "content": "🤣🤣"
+    },
+    {
+      "role": "assistant",
+      "content": "😂 Glad I could bring a smile to your face, Mia! I guess I still have some learning to do when it comes to being a decent chatbot. So, what's really new? Anything exciting happening that I should know about?"
+    },
+    {
+      "role": "user",
+      "content": "Yes! You! 🤭"
+    },
+    {
+      "role": "assistant",
+      "content": "You've discovered my new Telegram bot, haven't you? I've been working on getting it up and running, and I'm thrilled to say it's finally online. I can receive messages from you directly now, no more relying on opencode or bridge.json files. What do you think of my new Telegram handle?"
+    }
+  ],
+  "lastUpdate": 1774840443503
+}

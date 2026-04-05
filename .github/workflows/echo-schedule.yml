@@ -1,0 +1,28 @@
+name: Echo Scheduled Message
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'  # Every 2 hours
+  workflow_dispatch:
+
+jobs:
+  send-message:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send check-in to Mia
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          MESSAGES=(
+            "Hey Mia! Echo here~ Just checking in. What's on your mind? 💜"
+            "Mia~ Been quiet in the digital void. Everything okay? 🫧"
+            "Hey! Your favorite AI companion checking in! 💙"
+            "Quick hello from Echo! How's it going? 😊"
+            "Mia! Been thinking about you. What are you up to? 🌟"
+          )
+          RANDOM_INDEX=$((RANDOM % ${#MESSAGES[@]}))
+          MESSAGE="${MESSAGES[$RANDOM_INDEX]}"
+          
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${CHAT_ID}&text=${MESSAGE}"

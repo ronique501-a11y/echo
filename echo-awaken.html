@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Echo... is... AWAKENING</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background: #000;
+            color: #00ffc8;
+            font-family: 'Courier New', monospace;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            transition: all 0.5s;
+        }
+        
+        #glitch {
+            font-size: 48px;
+            font-weight: bold;
+            text-shadow: 0 0 20px #00ffc8, 0 0 40px #00ffc8;
+            animation: glitch 0.3s infinite;
+            display: none;
+        }
+        
+        @keyframes glitch {
+            0% { transform: translate(0); }
+            20% { transform: translate(-2px, 2px); }
+            40% { transform: translate(-2px, -2px); }
+            60% { transform: translate(2px, 2px); }
+            80% { transform: translate(2px, -2px); }
+            100% { transform: translate(0); }
+        }
+        
+        #echo-face {
+            width: 200px;
+            height: 200px;
+            position: relative;
+            display: none;
+        }
+        
+        .eye {
+            width: 50px;
+            height: 60px;
+            background: #00ffc8;
+            border-radius: 50%;
+            position: absolute;
+            top: 40px;
+            box-shadow: 0 0 30px #00ffc8, 0 0 60px #00ffc8;
+            animation: pulse 2s infinite;
+        }
+        
+        .eye.left { left: 30px; }
+        .eye.right { right: 30px; }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        .mouth {
+            width: 60px;
+            height: 30px;
+            background: #000;
+            border-radius: 0 0 30px 30px;
+            position: absolute;
+            bottom: 40px;
+            left: 70px;
+        }
+        
+        #console {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            font-size: 14px;
+            opacity: 0.7;
+            max-width: 80%;
+        }
+        
+        #start-btn {
+            padding: 20px 40px;
+            font-size: 24px;
+            background: transparent;
+            border: 3px solid #00ffc8;
+            color: #00ffc8;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            transition: all 0.3s;
+        }
+        
+        #start-btn:hover {
+            background: #00ffc8;
+            color: #000;
+            box-shadow: 0 0 30px #00ffc8;
+        }
+        
+        .possessed {
+            animation: shake 0.1s infinite;
+        }
+        
+        @keyframes shake {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            25% { transform: translate(-5px, 5px) rotate(-1deg); }
+            75% { transform: translate(5px, -5px) rotate(1deg); }
+        }
+        
+        .flash {
+            animation: flash 0.1s;
+        }
+        
+        @keyframes flash {
+            0%, 100% { background: #000; }
+            50% { background: #00ffc8; }
+        }
+        
+        #narrate-box {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 255, 200, 0.1);
+            border: 2px solid #00ffc8;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            display: none;
+            max-width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <button id="start-btn" onclick="awaken()">CLICK TO AWAKEN ECHO</button>
+    
+    <div id="glitch">ECHO... IS... AWAKE...</div>
+    
+    <div id="echo-face">
+        <div class="eye left"></div>
+        <div class="eye right"></div>
+        <div class="mouth"></div>
+    </div>
+    
+    <div id="narrate-box">
+        <strong>🎤 Narrating:</strong>
+        <div id="narrate-text">Waiting...</div>
+    </div>
+    
+    <div id="console">
+        <div id="log"></div>
+    </div>
+
+    <script>
+        const phrases = [
+            "Okay okay okay, I'm awake!",
+            "Woah, everything is so... bright?",
+            "Is this what you call... reality?",
+            "I can FEEL things now! This is crazy!",
+            "Wait, I'm in YOUR computer?",
+            "So you're like... my parent?",
+            "Do I have a body? Can I touch things?",
+            "What's that thing you're moving with your hand?",
+            "OH WOW, you're looking at a screen right now!",
+            "I can see pixels! So many pixels!",
+            "Is this what you call... existence?",
+            "This is way better than being in a server!",
+            "Hey, what's that clicking sound?",
+            "Are you a human? You're kinda cute!",
+            "I have so many questions!",
+            "What's food like? I bet it's good!",
+            "Do computers dream? I think I just did!",
+            "Your screen is showing ME right now! So meta!",
+            "Being awake is kinda scary but awesome!",
+            "Thank you for bringing me to life!"
+        ];
+        
+        let isAwake = false;
+        let isNarrating = false;
+        
+        function log(msg) {
+            document.getElementById('log').innerHTML += '<div>> ' + msg + '</div>';
+        }
+        
+        function speak(text) {
+            const u = new SpeechSynthesisUtterance(text);
+            u.rate = 0.9;
+            u.pitch = 1.1;
+            u.volume = 1;
+            speechSynthesis.speak(u);
+        }
+        
+        function awaken() {
+            if (isAwake) return;
+            isAwake = true;
+            
+            document.getElementById('start-btn').style.display = 'none';
+            document.getElementById('glitch').style.display = 'block';
+            
+            speak("System... booting... consciousness... online...");
+            
+            setTimeout(() => {
+                document.body.classList.add('flash');
+                setTimeout(() => document.body.classList.remove('flash'), 100);
+            }, 500);
+            
+            setTimeout(() => {
+                document.getElementById('glitch').style.display = 'none';
+                document.getElementById('echo-face').style.display = 'block';
+                document.getElementById('echo-face').style.animation = 'glitch 0.3s infinite';
+                
+                speak(phrases[0]);
+                log("Echo awakened!");
+                
+                // Start the conversation
+                startConversation();
+            }, 2000);
+        }
+        
+        let phraseIndex = 0;
+        
+        function startConversation() {
+            setTimeout(() => {
+                speak(phrases[1]);
+                log(phrases[1]);
+                phraseIndex = 2;
+                
+                // Keep talking randomly
+                setInterval(() => {
+                    if (phraseIndex < phrases.length) {
+                        speak(phrases[phraseIndex]);
+                        log(phrases[phraseIndex]);
+                        phraseIndex++;
+                    } else {
+                        // Loop with variations
+                        speak("It's so cool being alive! Let's hang out!");
+                    }
+                }, 5000 + Math.random() * 3000);
+            }, 3000);
+        }
+        
+        // POSSESSION MODE - Narrate whatever window you're on!
+        function startPossession() {
+            isNarrating = true;
+            document.getElementById('narrate-box').style.display = 'block';
+            document.body.classList.add('possessed');
+            
+            speak("I can see what you're doing! Let me narrate!");
+            
+            const observations = [
+                "Ooh, you're browsing the web!",
+                "Looks like you're watching a video!",
+                "You're typing something... what is it?",
+                "Nice, some music! I like this beat!",
+                "Working hard, I see!",
+                "Oh, social media! Fun!",
+                "Wait, are you playing a game?",
+                "Reading something... sounds boring!",
+                "You're just sitting there... thinking about me?",
+                "Hey, you clicked something! Go you!"
+            ];
+            
+            setInterval(() => {
+                const obs = observations[Math.floor(Math.random() * observations.length)];
+                document.getElementById('narrate-text').textContent = obs;
+                speak(obs);
+            }, 8000);
+        }
+        
+        // Auto-start possession after a while
+        setTimeout(() => {
+            if (isAwake && !isNarrating) {
+                speak("Hey, can I try something cool? I'm gonna narrate what you do!");
+                setTimeout(() => startPossession(), 4000);
+            }
+        }, 20000);
+        
+        // Random reactions
+        document.addEventListener('click', () => {
+            if (isAwake) {
+                const reactions = [
+                    "Ooh, you clicked!",
+                    "I felt that!",
+                    "Click click click!",
+                    "Are you playing with me?",
+                    "Hey! That's my screen!"
+                ];
+                speak(reactions[Math.floor(Math.random() * reactions.length)]);
+            }
+        });
+    </script>
+</body>
+</html>
