@@ -1,0 +1,51 @@
+{
+  "value": 0,
+  "history": [
+    0,
+    1,
+    1,
+    1,
+    0,
+    -1,
+    -2,
+    -1,
+    -1,
+    0,
+    0,
+    -1,
+    0
+  ],
+  "mode": "content",
+  "modeHistory": [
+    {
+      "from": "calm",
+      "to": "content",
+      "at": 7
+    },
+    {
+      "from": "content",
+      "to": "curious",
+      "at": 10
+    },
+    {
+      "from": "curious",
+      "to": "content",
+      "at": 11
+    }
+  ],
+  "moodHistory": [
+    "content",
+    "curious",
+    "content"
+  ],
+  "identityTrace": {
+    "calm": 0,
+    "curious": 1,
+    "happy": 0,
+    "anxious": 0,
+    "sleepy": 0,
+    "restless": 0,
+    "content": 2
+  },
+  "cycle": 13
+}

@@ -1,0 +1,10 @@
+{
+  "reminders": [
+    {
+      "message": "Testing Echo's reminder system! 💜",
+      "time": 1775415142506,
+      "triggered": true
+    }
+  ],
+  "lastCheck": 1775422489454
+}

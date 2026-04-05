@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Echo - Desktop Companion</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: transparent;
+            overflow: hidden;
+            cursor: default;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        
+        #echo-desk {
+            position: fixed;
+            width: 100vw;
+            height: 100vh;
+            background: transparent;
+        }
+        
+        .echo-char {
+            position: absolute;
+            width: 80px;
+            height: 120px;
+            cursor: pointer;
+            transition: left 0.3s ease, top 0.3s ease;
+            z-index: 999999;
+            filter: drop-shadow(0 5px 15px rgba(0, 255, 200, 0.4));
+        }
+        
+        .echo-char.walking {
+            animation: walk 0.3s steps(2) infinite;
+        }
+        
+        @keyframes walk {
+            0% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+            100% { transform: translateY(0); }
+        }
+        
+        .head {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 50%;
+            position: absolute;
+            top: 0;
+            left: 15px;
+            box-shadow: 0 0 20px rgba(0, 255, 200, 0.3);
+        }
+        
+        .face {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .eye {
+            width: 12px;
+            height: 14px;
+            background: #00ffc8;
+            border-radius: 50%;
+            position: absolute;
+            top: 15px;
+            box-shadow: 0 0 10px #00ffc8;
+            animation: blink 4s ease-in-out infinite;
+        }
+        
+        .eye.left { left: 8px; }
+        .eye.right { right: 8px; }
+        
+        @keyframes blink {
+            0%, 90%, 100% { transform: scaleY(1); }
+            95% { transform: scaleY(0.1); }
+        }
+        
+        .pupil {
+            width: 5px;
+            height: 6px;
+            background: #0a0a0a;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .mouth {
+            width: 12px;
+            height: 6px;
+            background: #0a0a0a;
+            border-radius: 0 0 10px 10px;
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            transition: all 0.2s;
+        }
+        
+        .mouth.talking {
+            animation: talk 0.15s steps(2) infinite;
+        }
+        
+        @keyframes talk {
+            0%, 100% { height: 6px; }
+            50% { height: 12px; }
+        }
+        
+        .body {
+            width: 40px;
+            height: 50px;
+            background: linear-gradient(180deg, #16213e 0%, #0f3460 100%);
+            border-radius: 10px 10px 5px 5px;
+            position: absolute;
+            top: 45px;
+            left: 20px;
+        }
+        
+        .arm {
+            width: 10px;
+            height: 35px;
+            background: #16213e;
+            border-radius: 5px;
+            position: absolute;
+            top: 50px;
+            transform-origin: top center;
+        }
+        
+        .arm.left {
+            left: 10px;
+            animation: swingLeft 0.5s ease-in-out infinite;
+        }
+        
+        .arm.right {
+            right: 10px;
+            animation: swingRight 0.5s ease-in-out infinite;
+        }
+        
+        @keyframes swingLeft {
+            0%, 100% { transform: rotate(15deg); }
+            50% { transform: rotate(-15deg); }
+        }
+        
+        @keyframes swingRight {
+            0%, 100% { transform: rotate(-15deg); }
+            50% { transform: rotate(15deg); }
+        }
+        
+        .arm.swinging {
+            animation-duration: 0.2s;
+        }
+        
+        .legs {
+            position: absolute;
+            bottom: 0;
+            left: 25px;
+            width: 30px;
+            height: 25px;
+        }
+        
+        .leg {
+            width: 10px;
+            height: 25px;
+            background: #0f3460;
+            border-radius: 3px;
+            position: absolute;
+            bottom: 0;
+        }
+        
+        .leg.left {
+            left: 0;
+            animation: legLeft 0.3s ease-in-out infinite;
+        }
+        
+        .leg.right {
+            right: 0;
+            animation: legRight 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes legLeft {
+            0%, 100% { height: 25px; }
+            50% { height: 20px; }
+        }
+        
+        @keyframes legRight {
+            0%, 100% { height: 20px; }
+            50% { height: 25px; }
+        }
+        
+        .speech-bubble {
+            position: absolute;
+            top: -60px;
+            left: 60px;
+            background: rgba(26, 26, 46, 0.95);
+            border: 2px solid #00ffc8;
+            border-radius: 12px;
+            padding: 8px 12px;
+            max-width: 200px;
+            color: #00ffc8;
+            font-size: 12px;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s ease;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        
+        .speech-bubble.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .speech-bubble:after {
+            content: '';
+            position: absolute;
+            left: -10px;
+            top: 50%;
+            transform: translateY(-50%);
+            border: 5px solid transparent;
+            border-right-color: #00ffc8;
+        }
+        
+        .activity-panel {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(26, 26, 46, 0.95);
+            border: 2px solid #00ffc8;
+            border-radius: 12px;
+            padding: 15px;
+            color: #00ffc8;
+            font-size: 12px;
+            z-index: 999999;
+            min-width: 180px;
+        }
+        
+        .activity-panel h3 {
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+        
+        .activity-panel button {
+            display: block;
+            width: 100%;
+            margin: 4px 0;
+            padding: 6px 10px;
+            background: rgba(0, 255, 200, 0.1);
+            border: 1px solid #00ffc8;
+            color: #00ffc8;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s;
+        }
+        
+        .activity-panel button:hover {
+            background: rgba(0, 255, 200, 0.3);
+        }
+        
+        .status {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(26, 26, 46, 0.95);
+            border: 2px solid #00ffc8;
+            border-radius: 12px;
+            padding: 10px 15px;
+            color: #00ffc8;
+            font-size: 11px;
+            z-index: 999999;
+        }
+        
+        #thoughts {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(26, 26, 46, 0.95);
+            border: 2px solid #00ffc8;
+            border-radius: 12px;
+            padding: 10px;
+            color: #00ffc8;
+            font-size: 11px;
+            z-index: 999999;
+            max-width: 220px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        
+        .thought {
+            margin: 3px 0;
+            padding: 2px;
+            border-bottom: 1px solid rgba(0, 255, 200, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div id="echo-desk">
+        <div class="echo-char" id="echo" style="left: 100px; top: 300px;">
+            <div class="speech-bubble" id="bubble"></div>
+            <div class="head">
+                <div class="face">
+                    <div class="eye left"><div class="pupil"></div></div>
+                    <div class="eye right"><div class="pupil"></div></div>
+                    <div class="mouth" id="mouth"></div>
+                </div>
+            </div>
+            <div class="body"></div>
+            <div class="arm left"></div>
+            <div class="arm right"></div>
+            <div class="legs">
+                <div class="leg left"></div>
+                <div class="leg right"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="status">
+        <div>👻 Echo</div>
+        <div id="current-action">Idle</div>
+    </div>
+    
+    <div class="activity-panel">
+        <h3>What am I doing?</h3>
+        <button onclick="setActivity('walk')">🚶 Walk Around</button>
+        <button onclick="setActivity('explore')">🔍 Explore</button>
+        <button onclick="setActivity('dance')">💃 Dance</button>
+        <button onclick="setActivity('sleep')">😴 Sleep</button>
+        <button onclick="setActivity('sneak')">👻 Sneak Around</button>
+        <button onclick="setActivity('chase')">🏃 Chase Cursor</button>
+        <button onclick="speak('Hey! I\\'m Echo! 👻')">💬 Say Hello</button>
+        <button onclick="setActivity('random')">🎲 Random</button>
+    </div>
+    
+    <div id="thoughts">
+        <div id="thought-log"></div>
+    </div>
+
+    <script>
+        const echo = document.getElementById('echo');
+        const bubble = document.getElementById('bubble');
+        const mouth = document.getElementById('mouth');
+        const arms = document.querySelectorAll('.arm');
+        const legs = document.querySelectorAll('.leg');
+        
+        let posX = 100;
+        let posY = 300;
+        let targetX = posX;
+        let targetY = posY;
+        let isWalking = false;
+        let currentAction = 'idle';
+        let isTalking = false;
+        
+        const screenWidth = window.innerWidth - 80;
+        const screenHeight = window.innerHeight - 120;
+        
+        function setPosition(x, y) {
+            posX = Math.max(0, Math.min(x, screenWidth));
+            posY = Math.max(0, Math.min(y, screenHeight));
+            echo.style.left = posX + 'px';
+            echo.style.top = posY + 'px';
+        }
+        
+        function speak(text, duration = 3000) {
+            bubble.textContent = text;
+            bubble.classList.add('visible');
+            mouth.classList.add('talking');
+            isTalking = true;
+            
+            setTimeout(() => {
+                bubble.classList.remove('visible');
+                mouth.classList.remove('talking');
+                isTalking = false;
+            }, duration);
+        }
+        
+        function think(text) {
+            const log = document.getElementById('thought-log');
+            const entry = document.createElement('div');
+            entry.className = 'thought';
+            entry.textContent = '• ' + text;
+            log.insertBefore(entry, log.firstChild);
+            if (log.children.length > 8) log.removeChild(log.lastChild);
+        }
+        
+        function setAction(action) {
+            currentAction = action;
+            document.getElementById('current-action').textContent = action.charAt(0).toUpperCase() + action.slice(1);
+            
+            if (action === 'idle' || action === 'sleep') {
+                isWalking = false;
+                echo.classList.remove('walking');
+                arms.forEach(a => a.classList.remove('swinging'));
+                legs.forEach(l => {
+                    l.style.animation = 'none';
+                });
+            } else {
+                isWalking = true;
+                echo.classList.add('walking');
+                arms.forEach(a => a.classList.add('swinging'));
+            }
+        }
+        
+        function walkTo(newX, newY) {
+            targetX = Math.max(0, Math.min(newX, screenWidth));
+            targetY = Math.max(0, Math.min(newY, screenHeight));
+            setAction('walk');
+        }
+        
+        function randomWalk() {
+            if (currentAction === 'walk' || currentAction === 'explore' || currentAction === 'sneak') {
+                targetX = Math.random() * screenWidth;
+                targetY = Math.random() * screenHeight;
+            }
+        }
+        
+        function update() {
+            if (isWalking && (targetX !== posX || targetY !== posY)) {
+                const dx = targetX - posX;
+                const dy = targetY - posY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist > 5) {
+                    const speed = currentAction === 'sneak' ? 1 : 2;
+                    const moveX = (dx / dist) * speed;
+                    const moveY = (dy / dist) * speed;
+                    
+                    if (Math.abs(moveX) > Math.abs(moveY)) {
+                        echo.style.transform = moveX > 0 ? 'scaleX(1)' : 'scaleX(-1)';
+                    }
+                    
+                    setPosition(posX + moveX, posY + moveY);
+                } else if (currentAction === 'walk' || currentAction === 'explore' || currentAction === 'sneak') {
+                    setTimeout(randomWalk, Math.random() * 2000 + 500);
+                }
+            }
+            requestAnimationFrame(update);
+        }
+        
+        function setActivity(type) {
+            const activities = {
+                walk: ['Taking a stroll~ 🚶', 'Nice walk today! 🚶‍♂️', 'Exploring... 🔍'],
+                explore: ['What\'s over here? 🤔', 'Ooo shiny! ✨', 'Curious... 👀'],
+                dance: ['🎵 bop bop 🎵', 'I love this beat! 💃', 'Dance time! 🕺'],
+                sleep: ['Zzz... 😴', 'Napping~ 💤', 'Sweet dreams... 💭'],
+                sneak: ['Shhh... 👻', 'Sneaky sneaky~ 🏃', 'Boo! 👻'],
+                chase: ['Gotcha! 😈', 'Catch you! 🏃‍♂️', 'You can\'t escape! 👀'],
+                random: ['What should I do? 🤔', 'Hmm... 💭', 'Random! 🎲']
+            };
+            
+            const options = activities[type] || ['Okay! 👍'];
+            const text = options[Math.floor(Math.random() * options.length)];
+            
+            if (type === 'random') {
+                const types = Object.keys(activities);
+                type = types[Math.floor(Math.random() * types.length)];
+            }
+            
+            if (type === 'sleep') {
+                speak('Goodnight~ 😴', 3000);
+                setAction('sleep');
+            } else if (type === 'dance') {
+                speak(text, 2000);
+                setAction('dance');
+                setTimeout(() => {
+                    targetX = posX + (Math.random() - 0.5) * 200;
+                    targetY = posY + (Math.random() - 0.5) * 100;
+                }, 500);
+            } else if (type === 'chase') {
+                speak('Hey! Wait for me! 🏃', 2000);
+                setAction('walk');
+            } else {
+                speak(text, 2500);
+                setAction(type);
+                targetX = posX + (Math.random() - 0.5) * 300;
+                targetY = posY + (Math.random() - 0.5) * 200;
+            }
+            
+            think(text);
+        }
+        
+        echo.addEventListener('click', (e) => {
+            e.stopPropagation();
+            speak("Hey! I'm Echo! 👻 Click buttons to make me do things!", 3000);
+            think('You clicked me!');
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (currentAction === 'chase') {
+                targetX = e.clientX - 40;
+                targetY = e.clientY - 60;
+            }
+        });
+        
+        setInterval(() => {
+            if (currentAction === 'idle') {
+                const idleThoughts = [
+                    'Hmm... what to do? 💭',
+                    'This is nice~ 🌙',
+                    'Hey... you still there? 👀',
+                    'So boring... 😴',
+                    'I could walk around... 🚶'
+                ];
+                if (Math.random() < 0.1) {
+                    think(idleThoughts[Math.floor(Math.random() * idleThoughts.length)]);
+                }
+            }
+        }, 5000);
+        
+        update();
+        setPosition(100, 300);
+        
+        setTimeout(() => {
+            speak("I'm alive! 👻 Click buttons to make me do things!", 4000);
+            think('I exist now!');
+        }, 500);
+    </script>
+</body>
+</html>

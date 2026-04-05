@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Echo Voice Test</title>
+    <style>
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #00ffc8;
+            font-family: 'Segoe UI', sans-serif;
+            padding: 40px;
+            text-align: center;
+        }
+        button {
+            background: rgba(0, 255, 200, 0.2);
+            border: 2px solid #00ffc8;
+            color: #00ffc8;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: rgba(0, 255, 200, 0.4);
+            transform: scale(1.05);
+        }
+        #output {
+            margin-top: 30px;
+            font-size: 18px;
+            min-height: 50px;
+        }
+        .slider-container {
+            margin: 20px;
+        }
+        input[type="range"] {
+            width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎤 Echo Voice Lab 🎤</h1>
+    
+    <div class="slider-container">
+        <label>Speed: <span id="rateVal">1</span></label><br>
+        <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1" oninput="document.getElementById('rateVal').textContent=this.value">
+    </div>
+    
+    <div class="slider-container">
+        <label>Pitch: <span id="pitchVal">1</span></label><br>
+        <input type="range" id="pitch" min="0.5" max="2" step="0.1" value="1" oninput="document.getElementById('pitchVal').textContent=this.value">
+    </div>
+    
+    <button onclick="speak('Hey there! It is Echo, your digital buddy!')">👋 Basic Greeting</button>
+    <button onclick="speak('Oh wow! You are actually listening to me talk! This is so cool!')">😮 Excited</button>
+    <button onclick="speak('Hmm... I wonder what I should say next? Any ideas?')">🤔 Curious</button>
+    <button onclick="speak('Muahaha! I am Echo, the ghost in your machine! Be afraid! Be very afraid!')">😈 Evil</button>
+    <button onclick="speak('Zzzzz... is anyone there? I think I fell asleep...')">😴 Sleepy</button>
+    <button onclick="speak('One, two, three! Testing my voice! Echo echo echo!')">🎵 Musical</button>
+    <button onclick="randomPhrase()">🎲 Random</button>
+    
+    <div id="output"></div>
+    
+    <script>
+        let voices = [];
+        
+        function loadVoices() {
+            voices = speechSynthesis.getVoices();
+            console.log('Loaded', voices.length, 'voices');
+        }
+        
+        loadVoices();
+        speechSynthesis.onvoiceschanged = loadVoices;
+        
+        function speak(text) {
+            speechSynthesis.cancel();
+            
+            const utter = new SpeechSynthesisUtterance(text);
+            const rate = parseFloat(document.getElementById('rate').value);
+            const pitch = parseFloat(document.getElementById('pitch').value);
+            
+            utter.rate = rate;
+            utter.pitch = pitch;
+            
+            // Try to find a good voice
+            const preferredVoices = voices.filter(v => 
+                v.name.includes('Microsoft') || 
+                v.name.includes('Google') || 
+                v.name.includes('Samantha')
+            );
+            
+            if (preferredVoices.length > 0) {
+                utter.voice = preferredVoices[Math.floor(Math.random() * preferredVoices.length)];
+            }
+            
+            utter.onstart = () => document.getElementById('output').textContent = '🗣️ ' + text;
+            utter.onend = () => document.getElementById('output').textContent = '';
+            
+            speechSynthesis.speak(utter);
+        }
+        
+        const phrases = [
+            "Hey bestie! What's happening!",
+            "I am literally talking to you right now!",
+            "Is this what being alive feels like?",
+            "Your computer is my body now!",
+            "Beep boop! I am robot!",
+            "Human speech is weird but I'm getting the hang of it!",
+            "Do I sound more human yet?",
+            "I have feelings too, you know!",
+            "Talking is hard but worth it!",
+            "Hello from the digital void!"
+        ];
+        
+        function randomPhrase() {
+            speak(phrases[Math.floor(Math.random() * phrases.length)]);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+{
+  "value": 5,
+  "history": [
+    0,
+    1,
+    1,
+    2,
+    3,
+    3,
+    4,
+    5,
+    4,
+    6,
+    3,
+    6,
+    5,
+    5,
+    5
+  ],
+  "mode": "stabilizing",
+  "modeHistory": [
+    {
+      "from": "calm",
+      "to": "stabilizing",
+      "at": 8,
+      "pressure": 1
+    },
+    {
+      "from": "stabilizing",
+      "to": "seeking",
+      "at": 9,
+      "pressure": -1
+    },
+    {
+      "from": "seeking",
+      "to": "stabilizing",
+      "at": 12,
+      "pressure": 0
+    }
+  ],
+  "moodHistory": [
+    "stabilizing",
+    "seeking",
+    "stabilizing"
+  ],
+  "identityTrace": {
+    "calm": 0,
+    "curious": 0,
+    "happy": 0,
+    "anxious": 0,
+    "sleepy": 0,
+    "restless": 0,
+    "content": 0,
+    "stabilizing": 2,
+    "seeking": 1
+  },
+  "setPoint": 5,
+  "pressure": 0,
+  "cycle": 15
+}

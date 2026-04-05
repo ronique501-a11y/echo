@@ -1,0 +1,25 @@
+# Echo Desktop Avatar - Current State
+
+## Issue
+Electron app has duplicate `let controlWin` declaration causing crash.
+
+## Fix Needed
+Remove the duplicate declaration on line ~321.
+
+## Features Working
+- Humanoid ghost character design (head, torso, arms, legs)
+- Control panel with spawn/warp/nuke/exit
+- Transparent always-on-top windows
+- Speech bubbles with random phrases
+
+## Files
+- `D:/Echo/avatar/electron/echo-desktop.js` - Main app
+- `D:/Echo/avatar/echo-chaos.html` - Browser version (works!)
+- `D:/Echo/avatar/echo-desktop.html` - Browser walking version
+
+## What user wanted
+- Real desktop app (not browser)
+- Little person that walks around independently
+- Interacts with cursor/windows
+- Multiple echos running around
+- CHAOS mode

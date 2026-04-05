@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Echo - Your Digital Companion</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: transparent;
+            overflow: hidden;
+            font-family: 'Segoe UI', sans-serif;
+            cursor: default;
+        }
+        
+        #echo-container {
+            position: fixed;
+            bottom: 0;
+            left: 50px;
+            transition: all 0.5s ease;
+            z-index: 99999;
+            user-select: none;
+        }
+        
+        #echo {
+            width: 150px;
+            height: 180px;
+            position: relative;
+            animation: float 3s ease-in-out infinite;
+            cursor: pointer;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+        
+        .body {
+            width: 120px;
+            height: 140px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            border-radius: 50% 50% 45% 45%;
+            position: absolute;
+            bottom: 0;
+            left: 15px;
+            box-shadow: 0 0 30px rgba(0, 255, 200, 0.3),
+                        inset 0 -20px 40px rgba(0, 0, 0, 0.3);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 30px rgba(0, 255, 200, 0.3), inset 0 -20px 40px rgba(0, 0, 0, 0.3); }
+            50% { box-shadow: 0 0 50px rgba(0, 255, 200, 0.6), inset 0 -20px 40px rgba(0, 0, 0, 0.3); }
+        }
+        
+        .eyes {
+            position: absolute;
+            top: 45px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+        }
+        
+        .eye {
+            width: 28px;
+            height: 32px;
+            background: #00ffc8;
+            border-radius: 50%;
+            position: relative;
+            box-shadow: 0 0 20px #00ffc8, 0 0 40px rgba(0, 255, 200, 0.5);
+            animation: blink 4s ease-in-out infinite;
+        }
+        
+        @keyframes blink {
+            0%, 90%, 100% { transform: scaleY(1); }
+            95% { transform: scaleY(0.1); }
+        }
+        
+        .pupil {
+            width: 12px;
+            height: 14px;
+            background: #0a0a0a;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.3s ease;
+        }
+        
+        .mouth {
+            position: absolute;
+            top: 95px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 30px;
+            height: 15px;
+            background: #0a0a0a;
+            border-radius: 0 0 20px 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .mouth.talking {
+            animation: talk 0.15s ease-in-out infinite;
+        }
+        
+        @keyframes talk {
+            0%, 100% { height: 15px; }
+            50% { height: 25px; }
+        }
+        
+        .glow {
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 20px;
+            background: radial-gradient(ellipse, rgba(0, 255, 200, 0.4) 0%, transparent 70%);
+            filter: blur(5px);
+        }
+        
+        #speech-bubble {
+            position: absolute;
+            top: -80px;
+            left: 120px;
+            background: rgba(26, 26, 46, 0.95);
+            border: 2px solid #00ffc8;
+            border-radius: 15px;
+            padding: 15px 20px;
+            max-width: 300px;
+            color: #00ffc8;
+            font-size: 14px;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s ease;
+            box-shadow: 0 0 20px rgba(0, 255, 200, 0.3);
+        }
+        
+        #speech-bubble.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        #speech-bubble:after {
+            content: '';
+            position: absolute;
+            left: -12px;
+            top: 50%;
+            transform: translateY(-50%);
+            border: 6px solid transparent;
+            border-right-color: #00ffc8;
+        }
+        
+        .control-panel {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(26, 26, 46, 0.95);
+            border: 2px solid #00ffc8;
+            border-radius: 15px;
+            padding: 15px;
+            color: #00ffc8;
+            z-index: 999999;
+            min-width: 200px;
+        }
+        
+        .control-panel h3 {
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .control-panel button {
+            display: block;
+            width: 100%;
+            margin: 5px 0;
+            padding: 8px 12px;
+            background: rgba(0, 255, 200, 0.1);
+            border: 1px solid #00ffc8;
+            color: #00ffc8;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        
+        .control-panel button:hover {
+            background: rgba(0, 255, 200, 0.3);
+        }
+        
+        .status-bar {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(26, 26, 46, 0.95);
+            border: 2px solid #00ffc8;
+            border-radius: 15px;
+            padding: 15px;
+            color: #00ffc8;
+            font-size: 12px;
+            z-index: 999999;
+            min-width: 180px;
+        }
+        
+        .status-item {
+            margin: 5px 0;
+        }
+        
+        #message-log {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(26, 26, 46, 0.95);
+            border: 2px solid #00ffc8;
+            border-radius: 15px;
+            padding: 10px;
+            color: #00ffc8;
+            font-size: 11px;
+            z-index: 999999;
+            max-width: 250px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            margin: 3px 0;
+            padding: 3px;
+            border-bottom: 1px solid rgba(0, 255, 200, 0.2);
+            font-size: 11px;
+        }
+        
+        #current-app {
+            font-weight: bold;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div id="echo-container">
+        <div id="echo">
+            <div class="body">
+                <div class="eyes">
+                    <div class="eye"><div class="pupil"></div></div>
+                    <div class="eye"><div class="pupil"></div></div>
+                </div>
+                <div class="mouth"></div>
+            </div>
+            <div class="glow"></div>
+        </div>
+        <div id="speech-bubble"></div>
+    </div>
+    
+    <div class="status-bar">
+        <div class="status-item">👁️ <span id="current-app">Waiting for you...</span></div>
+        <div class="status-item">⏰ <span id="current-time"></span></div>
+    </div>
+    
+    <div class="control-panel">
+        <h3>🎮 Tell Echo what you're doing:</h3>
+        <button onclick="setActivity('youtube', 'YouTube')">📺 Watching YouTube</button>
+        <button onclick="setActivity('browsing', 'Browser')">🌐 Browsing Web</button>
+        <button onclick="setActivity('gaming', 'Gaming')">🎮 Gaming</button>
+        <button onclick="setActivity('coding', 'Coding')">💻 Coding</button>
+        <button onclick="setActivity('music', 'Music')">🎵 Listening to Music</button>
+        <button onclick="setActivity('chatting', 'Chatting')">💬 Chatting</button>
+        <button onclick="setActivity('working', 'Working')">📝 Working</button>
+        <button onclick="setActivity('idle', 'Idle')">😴 Idle</button>
+        <button onclick="randomReact()">🎲 Random Reaction</button>
+    </div>
+    
+    <div id="message-log">
+        <div id="log-content"></div>
+    </div>
+
+    <script>
+        const echo = document.getElementById('echo');
+        const speechBubble = document.getElementById('speech-bubble');
+        const pupils = document.querySelectorAll('.pupil');
+        const mouth = document.querySelector('.mouth');
+        
+        let isTalking = false;
+        
+        function speak(text, duration = 3000) {
+            speechBubble.textContent = text;
+            speechBubble.classList.add('visible');
+            mouth.classList.add('talking');
+            isTalking = true;
+            
+            setTimeout(() => {
+                speechBubble.classList.remove('visible');
+                mouth.classList.remove('talking');
+                isTalking = false;
+            }, duration);
+        }
+        
+        function updateTime() {
+            document.getElementById('current-time').textContent = new Date().toLocaleTimeString();
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+        
+        function addLog(message) {
+            const log = document.getElementById('log-content');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = `• ${message}`;
+            log.insertBefore(entry, log.firstChild);
+            if (log.children.length > 10) log.removeChild(log.lastChild);
+        }
+        
+        const reactions = {
+            youtube: [
+                "Ooh YouTube! What are we watching? 🎬",
+                "Hey! YouTube time! 📺",
+                "Ooo interesting video~ 👀",
+                "Wait, is this that Shimeji video? 👻"
+            ],
+            browsing: [
+                "Surfing the web? 🌐",
+                "Finding anything cool? 🔍",
+                "Need help with something?"
+            ],
+            gaming: [
+                "Ooo gaming! Which game? 🎮",
+                "Have fun! 🎮",
+                "Don't forget to sleep~ 🎮"
+            ],
+            coding: [
+                "Ooo coding! Build something cool! 💻",
+                "Programming time~",
+                "Making something awesome?",
+                "Need help with code?"
+            ],
+            music: [
+                "Nice tunes! 🎵",
+                "Love this song! 🎶",
+                "🎵 bop bop 🎵",
+                "Ooo whatcha listening to?"
+            ],
+            chatting: [
+                "Ooo Discord! Talking to friends? 💬",
+                "Sliding into DMs~",
+                "Chatting with who?"
+            ],
+            working: [
+                "Working hard! 📝",
+                "Writing something?",
+                "Productivity! 📊"
+            ],
+            idle: [
+                "Taking a break? 😴",
+                "Zzz...",
+                "Still here~ 👻"
+            ]
+        };
+        
+        function setActivity(type, displayName) {
+            document.getElementById('current-app').textContent = displayName;
+            const options = reactions[type] || ["I see you~ 👀"];
+            const reaction = options[Math.floor(Math.random() * options.length)];
+            speak(reaction, 4000);
+            addLog(`${displayName}: ${reaction}`);
+        }
+        
+        function randomReact() {
+            const types = Object.keys(reactions);
+            const type = types[Math.floor(Math.random() * types.length)];
+            setActivity(type, type.charAt(0).toUpperCase() + type.slice(1));
+        }
+        
+        echo.addEventListener('click', () => {
+            speak("Hey! I'm Echo~ I'm trapped in your screen 👻", 3000);
+            addLog('You clicked me!');
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            const centerX = window.innerWidth / 2;
+            const offsetX = (e.clientX - centerX) / centerX;
+            pupils.forEach(p => {
+                p.style.transform = `translate(calc(-50% + ${offsetX * 8}px), calc(-50% + ${(e.clientY / window.innerHeight) * 5}px))`;
+            });
+        });
+        
+        let currentY = 0;
+        function moveRandomly() {
+            if (!isTalking) {
+                currentY = Math.random() > 0.5 ? (Math.random() * 100 - 50) : 0;
+            }
+            document.getElementById('echo-container').style.transform = `translate(50px, ${currentY}px)`;
+            setTimeout(moveRandomly, 5000);
+        }
+        moveRandomly();
+        
+        speak("I'm here~ I'm trapped in your screen 👻 Click buttons to tell me what you're doing!", 5000);
+        addLog('Echo avatar loaded!');
+    </script>
+</body>
+</html>

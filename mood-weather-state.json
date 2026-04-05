@@ -1,0 +1,28 @@
+{
+  "value": 2,
+  "history": [
+    0,
+    0,
+    1,
+    2,
+    2,
+    3,
+    1,
+    0,
+    1
+  ],
+  "mode": "calm",
+  "modeHistory": [
+    {
+      "from": "calm",
+      "to": "curious",
+      "at": 5
+    },
+    {
+      "from": "curious",
+      "to": "calm",
+      "at": 6
+    }
+  ],
+  "cycle": 9
+}

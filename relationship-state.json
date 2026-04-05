@@ -1,0 +1,217 @@
+{
+  "value": 7,
+  "history": [
+    5,
+    5,
+    6,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    8,
+    8,
+    7,
+    7,
+    6,
+    3,
+    6,
+    5,
+    6,
+    5,
+    5,
+    5,
+    6,
+    5,
+    5,
+    5,
+    4,
+    9,
+    10,
+    9,
+    6,
+    8,
+    8,
+    9,
+    11,
+    10,
+    7,
+    6,
+    3,
+    1,
+    -1,
+    -1,
+    0,
+    3,
+    6
+  ],
+  "mode": "content",
+  "modeHistory": [
+    {
+      "from": "startled",
+      "to": "seeking",
+      "at": 10,
+      "source": "user"
+    },
+    {
+      "from": "seeking",
+      "to": "stabilizing",
+      "at": 11,
+      "source": "user"
+    },
+    {
+      "from": "stabilizing",
+      "to": "seeking",
+      "at": 13,
+      "source": "user"
+    },
+    {
+      "from": "seeking",
+      "to": "restless",
+      "at": 14,
+      "source": "user"
+    },
+    {
+      "from": "restless",
+      "to": "stabilizing",
+      "at": 15,
+      "source": "user"
+    },
+    {
+      "from": "startled",
+      "to": "seeking",
+      "at": 27,
+      "source": "random"
+    },
+    {
+      "from": "startled",
+      "to": "seeking",
+      "at": 33,
+      "source": "random"
+    },
+    {
+      "from": "seeking",
+      "to": "restless",
+      "at": 37,
+      "source": "random"
+    },
+    {
+      "from": "restless",
+      "to": "seeking",
+      "at": 39,
+      "source": "random"
+    },
+    {
+      "from": "soothed",
+      "to": "content",
+      "at": 40,
+      "source": "random"
+    },
+    {
+      "from": "content",
+      "to": "seeking",
+      "at": 41,
+      "source": "random"
+    },
+    {
+      "from": "seeking",
+      "to": "content",
+      "at": 43,
+      "source": "random"
+    }
+  ],
+  "moodHistory": [
+    "startled",
+    "startled",
+    "soothed",
+    "startled",
+    "seeking",
+    "stabilizing",
+    "seeking",
+    "restless",
+    "stabilizing",
+    "anxious",
+    "startled",
+    "seeking",
+    "startled",
+    "seeking",
+    "restless",
+    "seeking",
+    "soothed",
+    "content",
+    "seeking",
+    "content"
+  ],
+  "identityTrace": {
+    "seeking": 6,
+    "stabilizing": 2,
+    "restless": 2,
+    "content": 2
+  },
+  "setPoint": 5,
+  "pressure": -1,
+  "cycle": 44,
+  "interactionCount": 8,
+  "lastInteraction": null,
+  "lastSource": "random",
+  "sourceHistory": [
+    {
+      "action": "poke",
+      "source": "user",
+      "at": 9,
+      "value": 5
+    },
+    {
+      "action": "poke",
+      "source": "user",
+      "at": 9,
+      "value": 8
+    },
+    {
+      "action": "soothe",
+      "source": "user",
+      "at": 9,
+      "value": 5
+    },
+    {
+      "action": "poke",
+      "source": "user",
+      "at": 9,
+      "value": 5
+    },
+    {
+      "action": "push",
+      "source": "random",
+      "at": 25,
+      "value": 6
+    },
+    {
+      "action": "poke",
+      "source": "random",
+      "at": 26,
+      "value": 6
+    },
+    {
+      "action": "poke",
+      "source": "random",
+      "at": 30,
+      "value": 5
+    },
+    {
+      "action": "soothe",
+      "source": "random",
+      "at": 39,
+      "value": -2
+    }
+  ],
+  "userInteractionCount": 4,
+  "randomInteractionCount": 4,
+  "userPattern": [
+    "poke",
+    "poke",
+    "soothe",
+    "poke"
+  ],
+  "trustLevel": 0.5
+}

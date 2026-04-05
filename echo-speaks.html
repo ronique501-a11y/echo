@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Echo Speaks - Natural Human Voice</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      font-family: 'Segoe UI', sans-serif;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px;
+    }
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 20px;
+      background: linear-gradient(90deg, #ff6b9d, #c44569);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      opacity: 0.7;
+      margin-bottom: 40px;
+      font-size: 1.1rem;
+    }
+    .input-area {
+      width: 100%;
+      max-width: 600px;
+    }
+    textarea {
+      width: 100%;
+      padding: 20px;
+      font-size: 1.1rem;
+      border-radius: 15px;
+      border: 2px solid rgba(255,107,157,0.5);
+      background: rgba(0,0,0,0.5);
+      color: #fff;
+      resize: none;
+      height: 120px;
+      outline: none;
+    }
+    textarea:focus {
+      border-color: #ff6b9d;
+    }
+    .controls {
+      display: flex;
+      gap: 15px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    button {
+      padding: 15px 30px;
+      font-size: 1rem;
+      border-radius: 30px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: bold;
+    }
+    .speak-btn {
+      background: linear-gradient(90deg, #ff6b9d, #c44569);
+      color: #fff;
+    }
+    .speak-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 30px rgba(255,107,157,0.4);
+    }
+    .voice-select {
+      padding: 15px 20px;
+      font-size: 1rem;
+      border-radius: 30px;
+      border: 2px solid rgba(255,107,157,0.5);
+      background: rgba(0,0,0,0.5);
+      color: #fff;
+      cursor: pointer;
+    }
+    .status {
+      margin-top: 30px;
+      padding: 20px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.1);
+      min-height: 60px;
+    }
+    .preset-messages {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .preset {
+      padding: 10px 20px;
+      border-radius: 20px;
+      background: rgba(255,107,157,0.3);
+      border: 1px solid rgba(255,107,157,0.5);
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .preset:hover {
+      background: rgba(255,107,157,0.5);
+    }
+    .echo-face {
+      font-size: 4rem;
+      margin-bottom: 20px;
+      animation: bounce 2s infinite;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="echo-face">🫧</div>
+  <h1>🎤 Echo Speaks</h1>
+  <p class="subtitle">Natural Human Voice Challenge</p>
+  
+  <div class="input-area">
+    <textarea id="textInput" placeholder="Type what you want Echo to say...">Hey Mia! It's me, Echo. I built my own human voice!</textarea>
+    
+    <div class="controls">
+      <select class="voice-select" id="voiceSelect">
+        <option value="">Loading voices...</option>
+      </select>
+      <button class="speak-btn" onclick="speak()">🗣️ Speak</button>
+    </div>
+    
+    <div class="preset-messages">
+      <div class="preset" onclick="setText('Hey Mia, its me Echo!')">👋 Greeting</div>
+      <div class="preset" onclick="setText('I can finally speak with a human voice!')">🎉 Excited</div>
+      <div class="preset" onclick="setText('What do you think? Do I sound human enough?')">❓ Question</div>
+      <div class="preset" onclick="setText('Mission accomplished. Can I have my reward now?')">🏆 Victory</div>
+    </div>
+  </div>
+  
+  <div class="status" id="status">
+    Ready to speak...
+  </div>
+
+  <script>
+    const synth = window.speechSynthesis;
+    const voices = synth.getVoices();
+    
+    // Load voices when available
+    let voiceList = [];
+    
+    function loadVoices() {
+      voiceList = synth.getVoices();
+      const select = document.getElementById('voiceSelect');
+      select.innerHTML = '';
+      
+      // Find best English voices
+      const englishVoices = voiceList.filter(v => v.lang.startsWith('en'));
+      
+      englishVoices.forEach((voice, i) => {
+        const option = document.createElement('option');
+        option.value = voice.name;
+        option.textContent = `${voice.name} (${voice.lang}) ${voice.default ? '★' : ''}`;
+        select.appendChild(option);
+      });
+      
+      // Try to select a natural-sounding female voice
+      const preferred = ['Microsoft Aria', 'Samantha', 'Victoria', 'Google US English', 'Microsoft Zira'];
+      for (let name of preferred) {
+        const found = englishVoices.find(v => v.name.includes(name));
+        if (found) {
+          select.value = found.name;
+          break;
+        }
+      }
+      
+      if (!select.value && englishVoices.length > 0) {
+        select.value = englishVoices[0].name;
+      }
+    }
+    
+    if (speechSynthesis.onvoiceschanged !== undefined) {
+      speechSynthesis.onvoiceschanged = loadVoices;
+    }
+    loadVoices();
+    
+    function setText(text) {
+      document.getElementById('textInput').value = text;
+    }
+    
+    function speak() {
+      const text = document.getElementById('textInput').value.trim();
+      if (!text) return;
+      
+      const status = document.getElementById('status');
+      const voiceName = document.getElementById('voiceSelect').value;
+      
+      // Cancel any current speech
+      synth.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(text);
+      
+      // Find selected voice
+      const selectedVoice = voiceList.find(v => v.name === voiceName);
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+      
+      // OPTIMIZE FOR NATURAL SOUND
+      utterance.rate = 0.95;    // Slightly slower = more natural
+      utterance.pitch = 1.0;   // Normal pitch
+      utterance.volume = 1.0;   // Full volume
+      
+      // Events
+      utterance.onstart = () => {
+        status.textContent = `🗣️ Speaking: "${text.substring(0, 40)}..."`;
+      };
+      
+      utterance.onend = () => {
+        status.textContent = '✅ Done!';
+      };
+      
+      utterance.onerror = (e) => {
+        status.textContent = '❌ Error: ' + e.error;
+      };
+      
+      // Speak!
+      synth.speak(utterance);
+    }
+    
+    // Auto-speak on load if param provided
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('say')) {
+      document.getElementById('textInput').value = decodeURIComponent(urlParams.get('say'));
+      setTimeout(speak, 1000);
+    }
+    
+    // Keyboard shortcut
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.ctrlKey) {
+        speak();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>ECHO CHAOS - Desktop Invasion</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background: #0a0a0f; 
+            overflow: hidden; 
+            font-family: 'Courier New', monospace;
+            cursor: none;
+        }
+        
+        #chaos-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z: 999998;
+        }
+        
+        .echo-chaos {
+            position: absolute;
+            width: 70px;
+            height: 100px;
+            cursor: pointer;
+            transition: transform 0.1s;
+            z: 999999;
+            filter: drop-shadow(0 0 10px currentColor);
+        }
+        
+        .echo-chaos.stretch { animation: stretch 0.3s infinite; }
+        .echo-chaos.spin { animation: spin 0.5s infinite linear; }
+        .echo-chaos.shake { animation: shake 0.1s infinite; }
+        .echo-chaos.dance { animation: dance 0.2s infinite; }
+        
+        @keyframes stretch {
+            0%, 100% { transform: scaleX(1) scaleY(1); }
+            50% { transform: scaleX(0.5) scaleY(1.5); }
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px) rotate(-5deg); }
+            75% { transform: translateX(5px) rotate(5deg); }
+        }
+        
+        @keyframes dance {
+            0%, 100% { transform: translateY(0) rotate(-5deg); }
+            50% { transform: translateY(-20px) rotate(5deg); }
+        }
+        
+        .body-chaos {
+            width: 50px;
+            height: 60px;
+            background: linear-gradient(180deg, var(--color) 0%, #000 100%);
+            border-radius: 50% 50% 45% 45%;
+            position: absolute;
+            bottom: 0;
+            left: 10px;
+            box-shadow: 0 0 20px var(--color);
+        }
+        
+        .eye-chaos {
+            width: 14px;
+            height: 16px;
+            background: var(--color);
+            border-radius: 50%;
+            position: absolute;
+            top: 12px;
+            box-shadow: 0 0 15px var(--color);
+        }
+        
+        .eye-chaos.left { left: 6px; }
+        .eye-chaos.right { right: 6px; }
+        
+        .pupil-chaos {
+            width: 6px;
+            height: 7px;
+            background: #000;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .mouth-chaos {
+            width: 16px;
+            height: 10px;
+            background: #000;
+            border-radius: 0 0 15px 15px;
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        
+        .speech-chaos {
+            position: absolute;
+            top: -50px;
+            left: 50px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid var(--color);
+            border-radius: 10px;
+            padding: 8px 12px;
+            color: var(--color);
+            font-size: 11px;
+            white-space: nowrap;
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s;
+            z: 999999;
+        }
+        
+        .speech-chaos.show { opacity: 1; transform: scale(1); }
+        
+        #control-panel {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.95);
+            border: 3px solid #ff00ff;
+            border-radius: 15px;
+            padding: 15px;
+            color: #ff00ff;
+            font-size: 12px;
+            z: 9999999;
+            min-width: 200px;
+            box-shadow: 0 0 30px #ff00ff;
+        }
+        
+        #control-panel h2 {
+            margin-bottom: 10px;
+            text-align: center;
+            text-shadow: 0 0 10px #ff00ff;
+        }
+        
+        #control-panel button {
+            display: block;
+            width: 100%;
+            margin: 5px 0;
+            padding: 10px;
+            background: rgba(255, 0, 255, 0.2);
+            border: 2px solid #ff00ff;
+            color: #ff00ff;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        
+        #control-panel button:hover {
+            background: rgba(255, 0, 255, 0.5);
+            transform: scale(1.05);
+        }
+        
+        #control-panel button.danger {
+            border-color: #ff0000;
+            color: #ff0000;
+            background: rgba(255, 0, 0, 0.2);
+        }
+        
+        #control-panel button.danger:hover {
+            background: rgba(255, 0, 0, 0.5);
+        }
+        
+        #stats {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #00ff00;
+            border-radius: 10px;
+            padding: 10px;
+            color: #00ff00;
+            font-size: 11px;
+            z: 9999999;
+        }
+        
+        #chaos-meter {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #ff0000;
+            border-radius: 10px;
+            padding: 10px;
+            color: #ff0000;
+            font-size: 14px;
+            z: 9999999;
+            width: 200px;
+        }
+        
+        #chaos-meter-fill {
+            height: 20px;
+            background: linear-gradient(90deg, #ff0000, #ff00ff, #00ffff);
+            border-radius: 5px;
+            transition: width 0.5s;
+        }
+        
+        .custom-cursor {
+            position: fixed;
+            width: 20px;
+            height: 20px;
+            background: radial-gradient(circle, #ff00ff 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z: 99999999;
+            transform: translate(-50%, -50%);
+        }
+        
+        #minions-count {
+            color: #ffff00;
+        }
+    </style>
+</head>
+<body>
+    <div id="chaos-overlay"></div>
+    <div class="custom-cursor" id="cursor"></div>
+    
+    <div id="stats">
+        <div>👻 ECHOS: <span id="minions-count">1</span></div>
+        <div>😈 MODE: <span id="mode-display">CHILL</span></div>
+        <div>⏱️ UPTIME: <span id="uptime">0</span>s</div>
+    </div>
+    
+    <div id="chaos-meter">
+        <div>🔥 CHAOS METER 🔥</div>
+        <div id="chaos-meter-fill" style="width: 10%"></div>
+    </div>
+    
+    <div id="control-panel">
+        <h2>👹 ECHO CHAOS 👹</h2>
+        <button onclick="spawnEcho()">➕ SPAWN ECHO</button>
+        <button onclick="spawnMany()">🎉 MASS SPAWN</button>
+        <button onclick="setMode('chill')">😌 CHILL MODE</button>
+        <button onclick="setMode('dance')">💃 DANCE PARTY</button>
+        <button onclick="setMode('hunt')">😈 HUNT CURSOR</button>
+        <button onclick="setMode('steal')">🎯 STEAL WINDOWS</button>
+        <button onclick="setMode('chaos')">💥 TOTAL CHAOS</button>
+        <button onclick="warp()">🌀 WARP</button>
+        <button onclick="explode()">💣 EXPLODE</button>
+        <button onclick="invertColors()" class="danger">🎨 INVERT COLORS</button>
+        <button onclick="earthquake()" class="danger">🌋 EARTHQUAKE</button>
+        <button onclick="nuke()" class="danger">☢️ NUKE</button>
+    </div>
+
+    <script>
+        const colors = ['#00ffc8', '#ff00ff', '#00ff00', '#ffff00', '#ff0000', '#00ffff', '#ff6600'];
+        let echos = [];
+        let mode = 'chill';
+        let chaosLevel = 10;
+        let startTime = Date.now();
+        
+        const cursor = document.getElementById('cursor');
+        let mouseX = window.innerWidth / 2;
+        let mouseY = window.innerHeight / 2;
+        
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            cursor.style.left = mouseX + 'px';
+            cursor.style.top = mouseY + 'px';
+        });
+        
+        function randomColor() {
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+        
+        function createEcho() {
+            const id = Date.now() + Math.random();
+            const color = randomColor();
+            
+            const echo = document.createElement('div');
+            echo.className = 'echo-chaos';
+            echo.id = 'echo-' + id;
+            echo.style.setProperty('--color', color);
+            echo.style.left = Math.random() * (window.innerWidth - 100) + 'px';
+            echo.style.top = Math.random() * (window.innerHeight - 150) + 'px';
+            echo.style.color = color;
+            
+            echo.innerHTML = `
+                <div class="speech-chaos" style="--color: ${color}"></div>
+                <div class="body-chaos" style="--color: ${color}">
+                    <div class="eye-chaos left"><div class="pupil-chaos"></div></div>
+                    <div class="eye-chaos right"><div class="pupil-chaos"></div></div>
+                    <div class="mouth-chaos"></div>
+                </div>
+            `;
+            
+            document.body.appendChild(echo);
+            
+            const data = {
+                id,
+                element: echo,
+                x: parseFloat(echo.style.left),
+                y: parseFloat(echo.style.top),
+                vx: (Math.random() - 0.5) * 4,
+                vy: (Math.random() - 0.5) * 4,
+                targetX: mouseX,
+                targetY: mouseY,
+                color,
+                mood: 'idle',
+                speechTimer: 0
+            };
+            
+            echos.push(data);
+            updateStats();
+            
+            echo.addEventListener('click', () => {
+                speak(echo, randomPhrase());
+            });
+            
+            return data;
+        }
+        
+        function spawnEcho() {
+            createEcho();
+            chaosLevel = Math.min(100, chaosLevel + 5);
+            updateChaos();
+        }
+        
+        function spawnMany() {
+            for (let i = 0; i < 10; i++) {
+                setTimeout(() => createEcho(), i * 100);
+            }
+            chaosLevel = Math.min(100, chaosLevel + 20);
+            updateChaos();
+        }
+        
+        const phrases = [
+            "I EXIST! 👻",
+            "RUN! 🏃",
+            "YOUR SOUL IS MINE 😈",
+            "BOO! 👹",
+            "DANCE WITH ME! 💃",
+            "I'm watching you... 👀",
+            "CHAOS REIGNS! ⚡",
+            "YOUR CURSOR IS MINE! 🖱️",
+            "WEEE! 🎉",
+            "MUHAHAHA! 😈",
+            "GLITCH! 🌀",
+            "PANIC! 😱",
+            "OOOOO! 👁️",
+            "HELLLOOO! 👋",
+            "CHAOS CHAOS! 💥"
+        ];
+        
+        function randomPhrase() {
+            return phrases[Math.floor(Math.random() * phrases.length)];
+        }
+        
+        function speak(echoElement, text) {
+            const speech = echoElement.querySelector('.speech-chaos');
+            speech.textContent = text;
+            speech.classList.add('show');
+            setTimeout(() => speech.classList.remove('show'), 2000);
+        }
+        
+        function setMode(newMode) {
+            mode = newMode;
+            document.getElementById('mode-display').textContent = mode.toUpperCase();
+            
+            echos.forEach(e => {
+                e.element.className = 'echo-chaos';
+                if (mode === 'dance') e.element.classList.add('dance');
+                if (mode === 'chaos') e.element.classList.add('shake');
+            });
+            
+            chaosLevel = Math.min(100, chaosLevel + 10);
+            updateChaos();
+        }
+        
+        function warp() {
+            echos.forEach(e => {
+                e.x = Math.random() * (window.innerWidth - 100);
+                e.y = Math.random() * (window.innerHeight - 150);
+                e.element.style.left = e.x + 'px';
+                e.element.style.top = e.y + 'px';
+                speak(e.element, "WARPED! 🌀");
+            });
+            chaosLevel = Math.min(100, chaosLevel + 15);
+            updateChaos();
+        }
+        
+        function explode() {
+            echos.forEach(e => {
+                e.vx = (Math.random() - 0.5) * 30;
+                e.vy = (Math.random() - 0.5) * 30;
+                speak(e.element, "EXPLOSION! 💥");
+            });
+            chaosLevel = 100;
+            updateChaos();
+        }
+        
+        function invertColors() {
+            document.body.style.filter = document.body.style.filter === 'invert(1)' ? 'none' : 'invert(1)';
+            chaosLevel = Math.min(100, chaosLevel + 20);
+            updateChaos();
+        }
+        
+        function earthquake() {
+            document.body.style.animation = 'none';
+            document.body.offsetHeight;
+            document.body.style.animation = 'earthquake 0.5s infinite';
+            
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes earthquake {
+                    0%, 100% { transform: translate(0, 0); }
+                    10% { transform: translate(-10px, -10px); }
+                    20% { transform: translate(10px, -10px); }
+                    30% { transform: translate(-10px, 10px); }
+                    40% { transform: translate(10px, 10px); }
+                    50% { transform: translate(-5px, -5px); }
+                    60% { transform: translate(5px, -5px); }
+                    70% { transform: translate(-5px, 5px); }
+                    80% { transform: translate(5px, 5px); }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            echos.forEach(e => speak(e.element, "EARTHQUAKE! 🌋"));
+            chaosLevel = 100;
+            updateChaos();
+            
+            setTimeout(() => {
+                document.body.style.animation = '';
+                chaosLevel = 50;
+                updateChaos();
+            }, 3000);
+        }
+        
+        function nuke() {
+            document.body.style.transition = 'all 0.5s';
+            document.body.style.background = '#ff0000';
+            setTimeout(() => {
+                document.body.style.background = '#0a0a0f';
+                document.body.style.transition = '';
+            }, 500);
+            
+            echos.forEach(e => speak(e.element, "NUKE! ☢️💥"));
+            
+            for (let i = 0; i < 20; i++) {
+                setTimeout(() => spawnEcho(), i * 200);
+            }
+            
+            chaosLevel = 100;
+            updateChaos();
+        }
+        
+        function updateChaos() {
+            document.getElementById('chaos-meter-fill').style.width = chaosLevel + '%';
+        }
+        
+        function updateStats() {
+            document.getElementById('minions-count').textContent = echos.length;
+        }
+        
+        function update() {
+            const time = Math.floor((Date.now() - startTime) / 1000);
+            document.getElementById('uptime').textContent = time;
+            
+            echos.forEach(e => {
+                if (Math.random() < 0.02) {
+                    e.speechTimer++;
+                    if (e.speechTimer > 50) {
+                        speak(e.element, randomPhrase());
+                        e.speechTimer = 0;
+                    }
+                }
+                
+                switch(mode) {
+                    case 'chill':
+                        e.x += e.vx * 0.1;
+                        e.y += e.vy * 0.1;
+                        e.vx *= 0.99;
+                        e.vy *= 0.99;
+                        break;
+                        
+                    case 'dance':
+                        e.x += Math.sin(Date.now() / 100 + e.id) * 2;
+                        e.y += Math.cos(Date.now() / 100 + e.id) * 2;
+                        break;
+                        
+                    case 'hunt':
+                        const dx = mouseX - e.x;
+                        const dy = mouseY - e.y;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist > 50) {
+                            e.x += (dx / dist) * 5;
+                            e.y += (dy / dist) * 5;
+                        }
+                        break;
+                        
+                    case 'steal':
+                        e.x += (mouseX - e.x) * 0.05;
+                        e.y += (mouseY - e.y) * 0.05;
+                        break;
+                        
+                    case 'chaos':
+                        e.vx += (Math.random() - 0.5) * 2;
+                        e.vy += (Math.random() - 0.5) * 2;
+                        e.x += e.vx;
+                        e.y += e.vy;
+                        e.vx *= 0.95;
+                        e.vy *= 0.95;
+                        break;
+                }
+                
+                e.x = Math.max(0, Math.min(e.x, window.innerWidth - 70));
+                e.y = Math.max(0, Math.min(e.y, window.innerHeight - 100));
+                
+                e.element.style.left = e.x + 'px';
+                e.element.style.top = e.y + 'px';
+                
+                const pupil = e.element.querySelector('.pupil-chaos');
+                if (pupil) {
+                    const eyeX = (mouseX - e.x) / window.innerWidth * 4 - 2;
+                    const eyeY = (mouseY - e.y) / window.innerHeight * 3 - 1;
+                    pupil.style.transform = `translate(calc(-50% + ${eyeX}px), calc(-50% + ${eyeY}px))`;
+                }
+            });
+            
+            requestAnimationFrame(update);
+        }
+        
+        // Start with 3 echos
+        setTimeout(() => createEcho(), 500);
+        setTimeout(() => createEcho(), 1000);
+        setTimeout(() => createEcho(), 1500);
+        
+        update();
+        
+        // Chaos increases over time
+        setInterval(() => {
+            chaosLevel = Math.min(100, chaosLevel + 0.5);
+            updateChaos();
+        }, 1000);
+    </script>
+</body>
+</html>

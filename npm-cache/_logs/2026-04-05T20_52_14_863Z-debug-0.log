@@ -1,0 +1,56 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.9.0
+2 info using node@v24.14.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:D:\Echo\.npmrc
+5 silly config load:file:C:\Users\rk\.npmrc
+6 silly config load:file:C:\Users\rk\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm install edge-tts
+8 verbose argv "install" "edge-tts" "--save"
+9 verbose logfile logs-max:10 dir:D:\Echo\npm-cache\_logs\2026-04-05T20_52_14_863Z-
+10 verbose logfile D:\Echo\npm-cache\_logs\2026-04-05T20_52_14_863Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 silly idealTree buildDeps
+14 silly fetch manifest edge-tts@*
+15 silly packumentCache full:https://registry.npmjs.org/edge-tts cache-miss
+16 http fetch GET 200 https://registry.npmjs.org/edge-tts 414ms (cache miss)
+17 silly packumentCache full:https://registry.npmjs.org/edge-tts set size:undefined disposed:false
+18 silly fetch manifest typescript@^5.0.0
+19 silly packumentCache full:https://registry.npmjs.org/typescript cache-miss
+20 http fetch GET 200 https://registry.npmjs.org/typescript 588ms (cache miss)
+21 silly packumentCache full:https://registry.npmjs.org/typescript set size:undefined disposed:false
+22 silly placeDep ROOT edge-tts@1.0.1 OK for:  want: *
+23 silly placeDep ROOT typescript@5.9.3 OK for: edge-tts@1.0.1 want: ^5.0.0
+24 silly fetch manifest ws@^8.16.0
+25 silly packumentCache full:https://registry.npmjs.org/ws cache-miss
+26 http fetch GET 200 https://registry.npmjs.org/ws 86ms (cache miss)
+27 silly packumentCache full:https://registry.npmjs.org/ws set size:undefined disposed:false
+28 silly fetch manifest bufferutil@^4.0.1
+29 silly packumentCache full:https://registry.npmjs.org/bufferutil cache-miss
+30 http fetch GET 200 https://registry.npmjs.org/bufferutil 81ms (cache miss)
+31 silly packumentCache full:https://registry.npmjs.org/bufferutil set size:undefined disposed:false
+32 silly fetch manifest utf-8-validate@>=5.0.2
+33 silly packumentCache full:https://registry.npmjs.org/utf-8-validate cache-miss
+34 http fetch GET 200 https://registry.npmjs.org/utf-8-validate 86ms (cache miss)
+35 silly packumentCache full:https://registry.npmjs.org/utf-8-validate set size:undefined disposed:false
+36 silly placeDep ROOT ws@8.20.0 OK for: edge-tts@1.0.1 want: ^8.16.0
+37 silly reify moves {}
+38 http cache ws@https://registry.npmjs.org/ws/-/ws-8.20.0.tgz 0ms (cache hit)
+39 http cache typescript@https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz 0ms (cache hit)
+40 http cache edge-tts@https://registry.npmjs.org/edge-tts/-/edge-tts-1.0.1.tgz 0ms (cache hit)
+41 silly tarball no local data for ws@https://registry.npmjs.org/ws/-/ws-8.20.0.tgz. Extracting by manifest.
+42 silly tarball no local data for typescript@https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz. Extracting by manifest.
+43 silly tarball no local data for edge-tts@https://registry.npmjs.org/edge-tts/-/edge-tts-1.0.1.tgz. Extracting by manifest.
+44 http fetch GET 200 https://registry.npmjs.org/ws/-/ws-8.20.0.tgz 141ms (cache miss)
+45 http fetch GET 200 https://registry.npmjs.org/edge-tts/-/edge-tts-1.0.1.tgz 341ms (cache miss)
+46 http fetch GET 200 https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz 1226ms (cache miss)
+47 silly ADD node_modules/ws
+48 silly ADD node_modules/typescript
+49 silly ADD node_modules/edge-tts
+50 verbose cwd D:\Echo
+51 verbose os Windows_NT 10.0.19045
+52 verbose node v24.14.0
+53 verbose npm  v11.9.0
+54 verbose exit 0
+55 info ok

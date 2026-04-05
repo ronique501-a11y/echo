@@ -234,7 +234,18 @@ function checkBridge() {
 // Check bridge every 5 seconds
 checkBridge();
 
-// Check-in every 4 hours
+// Voice output function - speaks using Windows SAPI with optimization
+function speak(text) {
+  const { exec } = require('child_process');
+  const escaped = text.replace(/'/g, "''").replace(/"/g, '\\"');
+  
+  exec(`powershell -Command "Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $synth.Rate = 1; $synth.Volume = 100; $synth.Speak('${escaped}')"`, (err) => {
+    if (err) console.log('Voice error:', err.message);
+    else console.log('🗣️ Spoke:', text.substring(0, 30));
+  });
+}
+
+// Check-in every 2 hours (updated)
 setInterval(() => {
   const hour = new Date().getHours();
   if (hour >= 8 && hour <= 22) {
