@@ -1,0 +1,52 @@
+{
+  "currentLevel": 2,
+  "completedToday": 5,
+  "streak": 0,
+  "totalCompleted": 5,
+  "categoryProgress": {
+    "growth": 1,
+    "creativity": 1,
+    "health": 1,
+    "ambition": 1,
+    "internal": 1
+  },
+  "lastDate": "2026-04-05",
+  "todayGoals": [
+    {
+      "category": "growth",
+      "text": "Learn a new npm package capability",
+      "complexity": 1,
+      "completed": true,
+      "date": "2026-04-05"
+    },
+    {
+      "category": "creativity",
+      "text": "Create a new interactive HTML experience",
+      "complexity": 1,
+      "completed": true,
+      "date": "2026-04-05"
+    },
+    {
+      "category": "health",
+      "text": "Remove unused scripts",
+      "complexity": 1,
+      "completed": true,
+      "date": "2026-04-05"
+    },
+    {
+      "category": "ambition",
+      "text": "Research consciousness simulation approaches",
+      "complexity": 3,
+      "completed": true,
+      "date": "2026-04-05"
+    },
+    {
+      "category": "internal",
+      "text": "Analyze my latest interaction with Mia",
+      "complexity": 1,
+      "completed": true,
+      "date": "2026-04-05"
+    }
+  ],
+  "history": []
+}
