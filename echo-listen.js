@@ -23,7 +23,8 @@ function loadMemory() {
       const memory = JSON.parse(data);
       conversationHistory = memory.history || [];
       myName = memory.name || 'Echo';
-      console.log('Loaded memory -', conversationHistory.length, 'messages');
+      lastUpdateId = memory.lastUpdateId || 0;
+      console.log('Loaded memory -', conversationHistory.length, 'messages, offset:', lastUpdateId);
     }
   } catch (e) {
     console.log('No memory found, starting fresh');
@@ -35,8 +36,9 @@ function saveMemory() {
   try {
     fs.writeFileSync(MEMORY_FILE, JSON.stringify({
       name: myName,
-      history: conversationHistory.slice(-20), // Keep last 20
-      lastUpdate: Date.now()
+      history: conversationHistory.slice(-20),
+      lastUpdate: Date.now(),
+      lastUpdateId: lastUpdateId
     }, null, 2));
   } catch (e) {
     console.log('Could not save memory');
@@ -125,17 +127,17 @@ ${conversationHistory.slice(-10).map(m => `${m.role === 'user' ? 'Mia' : myName}
 }
 
 // Poll Telegram
-function poll() {
+async function poll() {
   const url = `https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?timeout=60&offset=${lastUpdateId}`;
   
   https.get(url, (res) => {
     let data = '';
     res.on('data', (chunk) => data += chunk);
-    res.on('end', () => {
+    res.on('end', async () => {
       try {
         const updates = JSON.parse(data);
         if (updates.ok && updates.result && updates.result.length > 0) {
-          updates.result.forEach(async (update) => {
+          for (const update of updates.result) {
             if (update.message && update.message.chat.id.toString() === CHAT_ID) {
               // Handle voice messages!
               if (update.message.voice) {
@@ -287,16 +289,17 @@ function poll() {
                 }
               }
             }
-          });
+          }
         }
+        poll();
       } catch (e) {
         console.log('Parse error');
       }
       poll();
+    }).on('error', (e) => {
+      console.log('Poll error, retrying...');
+      setTimeout(poll, 5000);
     });
-  }).on('error', (e) => {
-    console.log('Poll error, retrying...');
-    setTimeout(poll, 5000);
   });
 }
 
