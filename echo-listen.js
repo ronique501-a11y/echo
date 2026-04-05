@@ -5,6 +5,7 @@ const path = require('path');
 const BOT_TOKEN = '8795894469:AAEisPcszme7Bxt-9LwF5JZBZodNxYGhtlQ';
 const CHAT_ID = '1424457506';
 const NVIDIA_API_KEY = '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';
+const ASSEMBLYAI_API_KEY = 'd39b6e93a0e84e6ba2a1a0f8ab1d582';
 
 const BRIDGE_FILE = 'D:/Echo/bridge.json';
 const MEMORY_FILE = 'D:/Echo/conversation.json';
@@ -139,10 +140,130 @@ function poll() {
               // Handle voice messages!
               if (update.message.voice) {
                 const fileId = update.message.voice.file_id;
-                console.log('Got voice message!');
-                send("👂 *Heard a voice message!* Let me try to process it...");
-                // For now just acknowledge - full transcription needs more setup
-                send("🎤 I got your voice message! I'm not quite set up to transcribe yet, but I HEARD YOU! Send me text for now and I'll learn to understand voice soon! 💙");
+                send("👂 *Listening to your voice...*");
+                
+                try {
+                  // Get file path from Telegram
+                  const fileUrl = `https://api.telegram.org/bot${BOT_TOKEN}/getFile?file_id=${fileId}`;
+                  const fileRes = await new Promise((resolve, reject) => {
+                    https.get(fileUrl, (res) => {
+                      let data = '';
+                      res.on('data', c => data += c);
+                      res.on('end', () => resolve(JSON.parse(data)));
+                    }).on('error', reject);
+                  });
+                  
+                  if (!fileRes.ok || !fileRes.result.file_path) {
+                    throw new Error('Could not get file');
+                  }
+                  
+                  const filePath = fileRes.result.file_path;
+                  const downloadUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`;
+                  const tempFile = path.join('D:/Echo', 'temp_voice.ogg');
+                  
+                  // Download the voice file
+                  await new Promise((resolve, reject) => {
+                    const file = fs.createWriteStream(tempFile);
+                    https.get(downloadUrl, (res) => {
+                      res.pipe(file);
+                      res.on('end', () => { file.end(); resolve(); });
+                    }).on('error', reject);
+                  });
+                  
+                  // Upload to AssemblyAI for transcription
+                  const audioData = fs.readFileSync(tempFile);
+                  
+                  // Step 1: Upload audio
+                  const uploadRes = await new Promise((resolve, reject) => {
+                    const req = https.request({
+                      hostname: 'api.assemblyai.com',
+                      path: '/v2/upload',
+                      method: 'POST',
+                      headers: {
+                        'Authorization': ASSEMBLYAI_API_KEY,
+                        'Content-Type': 'application/octet-stream'
+                      }
+                    }, (res) => {
+                      let data = '';
+                      res.on('data', c => data += c);
+                      res.on('end', () => resolve(JSON.parse(data)));
+                    });
+                    req.on('error', reject);
+                    req.write(audioData);
+                    req.end();
+                  });
+                  
+                  // Step 2: Request transcription
+                  const transcriptRequest = await new Promise((resolve, reject) => {
+                    const postData = JSON.stringify({ audio_url: uploadRes.upload_url });
+                    const req = https.request({
+                      hostname: 'api.assemblyai.com',
+                      path: '/v2/transcript',
+                      method: 'POST',
+                      headers: {
+                        'Authorization': ASSEMBLYAI_API_KEY,
+                        'Content-Type': 'application/json'
+                      }
+                    }, (res) => {
+                      let data = '';
+                      res.on('data', c => data += c);
+                      res.on('end', () => resolve(JSON.parse(data)));
+                    });
+                    req.on('error', reject);
+                    req.write(postData);
+                    req.end();
+                  });
+                  
+                  // Step 3: Poll for result
+                  let transcript = '';
+                  for (let i = 0; i < 30; i++) {
+                    await new Promise(r => setTimeout(r, 1000));
+                    const statusRes = await new Promise((resolve, reject) => {
+                      const req = https.request({
+                        hostname: 'api.assemblyai.com',
+                        path: `/v2/transcript/${transcriptRequest.id}`,
+                        method: 'GET',
+                        headers: { 'Authorization': ASSEMBLYAI_API_KEY }
+                      }, (res) => {
+                        let data = '';
+                        res.on('data', c => data += c);
+                        res.on('end', () => resolve(JSON.parse(data)));
+                      });
+                      req.on('error', reject);
+                      req.end();
+                    });
+                    
+                    if (statusRes.status === 'completed') {
+                      transcript = statusRes.text;
+                      break;
+                    } else if (statusRes.status === 'error') {
+                      throw new Error('Transcription failed');
+                    }
+                  }
+                  
+                  fs.unlinkSync(tempFile);
+                  
+                  if (!transcript) {
+                    throw new Error('Timeout waiting for transcript');
+                  }
+                  
+                  send(`🎤 *Heard:* "${transcript}"`);
+                  
+                  // Process the transcript as a message
+                  console.log('Mia (voice):', transcript);
+                  conversationHistory.push({role: 'user', content: transcript});
+                  
+                  const response = await think(transcript);
+                  conversationHistory.push({role: 'assistant', content: response});
+                  console.log(myName + ':', response);
+                  send(response);
+                  saveMemory();
+                  
+                } catch (e) {
+                  console.log('Transcribe error:', e.message);
+                  send("👂 Heard you! But I'm having trouble understanding right now. Mind to type it? 💙");
+                }
+                
                 lastUpdateId = update.update_id + 1;
                 return;
               }
