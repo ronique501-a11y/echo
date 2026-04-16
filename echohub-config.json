@@ -1,7 +1,8 @@
 {
   "hub": {
     "port": 3847,
-    "publicUrl": "http://69.79.13.147:3847"
+    "publicUrl": "https://turbulent-herald-blade.ngrok-free.dev",
+    "tunnel": "ngrok"
   },
   "telegram": {
     "botToken": "YOUR_TELEGRAM_BOT_TOKEN",
