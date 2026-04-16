@@ -44,12 +44,14 @@ const messages = [];
 const onlineUsers = new Set();
 const typingUsers = new Map();
 
-// Load saved messages
+// Load saved messages (only if file has content)
 try {
   if (fs.existsSync(CONFIG.messageFile)) {
     const saved = JSON.parse(fs.readFileSync(CONFIG.messageFile, 'utf8'));
-    messages.push(...saved);
-    console.log(`[Hub] Loaded ${saved.length} saved messages`);
+    if (Array.isArray(saved) && saved.length > 0) {
+      messages.push(...saved);
+      console.log(`[Hub] Loaded ${saved.length} saved messages`);
+    }
   }
 } catch (e) {}
 
@@ -657,6 +659,27 @@ function getWebUI() {
       }
     }
     
+    async function loadChannels() {
+      try {
+        const res = await fetch('/api/channels');
+        const data = await res.json();
+        if (data.channels && data.channels.length > 0) {
+          const channelList = document.getElementById('channelList');
+          if (channelList) {
+            channelList.innerHTML = data.channels.map(c => 
+              '<div class="channel" onclick="switchChannel(\'' + c.id + '\')"><span>#</span><span>' + c.name + '</span></div>'
+            ).join('');
+          }
+        }
+      } catch (e) {}
+    }
+    
+    window.switchChannel = function(channelId) {
+      channel = channelId;
+      document.getElementById('channelName').textContent = '#' + channelId;
+      loadMessages();
+    }
+    
     async function refreshOnline() {
       const res = await fetch('/api/online');
       const data = await res.json();
@@ -745,10 +768,10 @@ function getWebUI() {
     }
     
     // Attach event listeners
-    document.getElementById('joinBtn').addEventListener('click', join);
+    document.getElementById('joinBtn').addEventListener('click', window.testJoin);
     log('Event listener attached');
     document.getElementById('nameInput').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') join();
+      if (e.key === 'Enter') window.testJoin();
     });
     log('Page loaded');
   </script>

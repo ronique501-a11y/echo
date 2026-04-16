@@ -508,7 +508,7 @@
       hideSettings();
     }
     
-    async     function connectWS() {
+    async function connectWS() {
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = protocol + '//' + location.host + '/ws?session=' + sessionId;
       
@@ -519,6 +519,7 @@
         statusDiv.textContent = 'Connected!';
         statusDiv.style.color = '#4ade80';
         loadMessages();
+        loadChannels();
         setInterval(refreshOnline, 3000);
         setInterval(refreshBots, 5000);
         refreshBots();
@@ -571,7 +572,7 @@
     
     async function loadMessages() {
       try {
-        const res = await fetch('/api/messages?channelId=default');
+        const res = await fetch('/api/messages?channelId=' + channel);
         const data = await res.json();
         messagesDiv.innerHTML = '';
         allMessages = [];
@@ -580,6 +581,29 @@
       } catch (e) {
         errorDiv.textContent = 'Load error: ' + e.message;
       }
+    }
+    
+    async function loadChannels() {
+      try {
+        const res = await fetch('/api/channels');
+        const data = await res.json();
+        if (data.channels && data.channels.length > 0) {
+          const channelList = document.getElementById('channelList');
+          if (channelList) {
+            channelList.innerHTML = data.channels.map(c => 
+              '<div class="online-user" onclick="switchChannel(\'' + c.id + '\')"><div class="avatar" style="background:linear-gradient(135deg,#ffd93d,#ff6b6b);">#</div><div>' + c.name + '</div></div>'
+            ).join('');
+          }
+        }
+      } catch (e) {}
+    }
+    
+    window.switchChannel = function(channelId) {
+      currentDm = null;
+      channel = channelId;
+      document.getElementById('channelTitle').textContent = '#' + channelId;
+      document.getElementById('channelTitle').style.color = '#00d9ff';
+      loadMessages();
     }
   </script>
 </body>
