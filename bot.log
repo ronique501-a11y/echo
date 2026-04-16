@@ -1,0 +1,26 @@
+Loaded memory - 0 messages, offset: 1000
+Echo is awake...
+Last update ID: 1000
+Polling Telegram for messages...
+Making request to Telegram...
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: connect ETIMEDOUT 149.154.166.110:443
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1645:16)
+Emitted 'error' event on ClientRequest instance at:
+    at emitErrorEvent (node:_http_client:108:11)
+    at TLSSocket.socketErrorListener (node:_http_client:575:5)
+    at TLSSocket.emit (node:events:508:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  errno: -4039,
+  code: 'ETIMEDOUT',
+  syscall: 'connect',
+  address: '149.154.166.110',
+  port: 443
+}
+
+Node.js v24.14.0
