@@ -1,0 +1,11 @@
+{
+  "hub": {
+    "port": 3847,
+    "publicUrl": "http://69.79.13.147:3847"
+  },
+  "telegram": {
+    "botToken": "YOUR_TELEGRAM_BOT_TOKEN",
+    "chatId": "YOUR_CHAT_ID",
+    "hubBotToken": "generate-a-secure-token-for-this-bot"
+  }
+}
