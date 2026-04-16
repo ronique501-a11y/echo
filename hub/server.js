@@ -293,8 +293,8 @@ const server = http.createServer((req, res) => {
       const data = safeJsonParse(body);
       if (!data?.name) { res.writeHead(400); res.end('{"error":"Name required"}'); return; }
       const sessionId = crypto.randomBytes(16).toString('hex');
-      // Hash the display name for privacy
-      const displayName = crypto.createHash('sha256').update(data.name + CONFIG.hubId).digest('hex').substring(0, 8);
+      // Use actual name for display
+      const displayName = data.name;
       sessions.set(sessionId, { name: displayName, originalName: data.name, channelId: data.channelId || 'default', ws: null });
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ sessionId, displayName }));
