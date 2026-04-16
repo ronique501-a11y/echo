@@ -377,7 +377,7 @@ const server = http.createServer((req, res) => {
   
   if (pathname === '/' || pathname === '/index.html' || pathname === '/simple') {
     const simpleHtml = require('fs').readFileSync(__dirname + '/simple.html', 'utf8');
-    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(simpleHtml);
     return;
   }
