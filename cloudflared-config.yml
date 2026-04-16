@@ -1,0 +1,7 @@
+tunnel: echo-hub
+credentials-file: ./cf-credentials.json
+
+ingress:
+  - hostname: echo-hub.trycloudflare.com
+    service: http://localhost:3847
+  - service: http_status:404
