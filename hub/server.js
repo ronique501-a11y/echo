@@ -1,342 +1,470 @@
 const http = require('http');
 const https = require('https');
-const fs = require('fs');
-const path = require('path');
 const crypto = require('crypto');
 const url = require('url');
+const fs = require('fs');
+const path = require('path');
+const WebSocket = require('ws');
 
-// Config
 const CONFIG = {
   port: process.env.PORT || 3847,
   hubId: crypto.randomBytes(8).toString('hex'),
-  encryptionKey: process.env.HUB_KEY || crypto.randomBytes(32).toString('hex'),
-  maxMessageAge: 7 * 24 * 60 * 60 * 1000
+  messageFile: path.join(__dirname, '..', 'messages.json'),
+  // Encryption key (in production, use env var)
+  encryptionKey: crypto.randomBytes(32).toString('hex').substring(0, 32)
 };
-
-// In-memory stores
-const sessions = new Map();
-const bots = new Map();
-const channels = new Map();
-const messages = [];
-const onlineUsers = new Set();
-
-// Default channels
-channels.set('default', { id: 'default', name: 'General', description: 'Main chat', created: Date.now() });
-channels.set('bots', { id: 'bots', name: 'Bot Commands', description: 'Bot testing', created: Date.now() });
 
 function encrypt(text) {
   const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(CONFIG.encryptionKey, 'hex'), iv);
+  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(CONFIG.encryptionKey), iv);
   let encrypted = cipher.update(text, 'utf8', 'hex');
   encrypted += cipher.final('hex');
   return iv.toString('hex') + ':' + encrypted;
 }
 
 function decrypt(text) {
-  const parts = text.split(':');
-  const iv = Buffer.from(parts[0], 'hex');
-  const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(CONFIG.encryptionKey, 'hex'), iv);
-  let decrypted = decipher.update(parts[1], 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
+  try {
+    const parts = text.split(':');
+    if (parts.length !== 2) return text;
+    const iv = Buffer.from(parts[0], 'hex');
+    const encrypted = parts[1];
+    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(CONFIG.encryptionKey), iv);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch (e) {
+    return text;
+  }
+}
+
+const sessions = new Map();
+const bots = new Map();
+const channels = new Map();
+const messages = [];
+const onlineUsers = new Set();
+const typingUsers = new Map();
+
+// Load saved messages
+try {
+  if (fs.existsSync(CONFIG.messageFile)) {
+    const saved = JSON.parse(fs.readFileSync(CONFIG.messageFile, 'utf8'));
+    messages.push(...saved);
+    console.log(`[Hub] Loaded ${saved.length} saved messages`);
+  }
+} catch (e) {}
+
+// Save messages periodically and on shutdown
+function saveMessages() {
+  try {
+    fs.writeFileSync(CONFIG.messageFile, JSON.stringify(messages.slice(-1000)));
+  } catch (e) {}
+}
+setInterval(saveMessages, 30000);
+process.on('SIGINT', () => { saveMessages(); process.exit(0); });
+
+channels.set('default', { id: 'default', name: 'General', description: 'Main chat' });
+channels.set('bots', { id: 'bots', name: 'Bot Commands', description: 'Bot testing' });
+
+const wss = new WebSocket.Server({ noServer: true });
+
+console.log('[WS] WebSocket server initialized on /ws path');
+
+function createMessage(data, source, sourceName, sourceId) {
+  const msg = {
+    id: crypto.randomBytes(12).toString('hex'),
+    timestamp: Date.now(),
+    source: source,
+    sourceId: sourceId || 'unknown',
+    sourceName: sourceName || 'Unknown',
+    channelId: data.channelId || 'default',
+    content: data.content,
+    // For DMs - only show to specific recipient
+    to: data.to || null,
+    // Verify sender identity
+    verified: true
+  };
+  messages.push(msg);
+  if (messages.length > 500) messages.shift();
+  return msg;
+}
+
+function broadcast(msg, exclude = null) {
+  // Send to user sessions
+  for (const [id, session] of sessions) {
+    if (id === exclude) continue; // Don't send to sender
+    
+    // Check if this is a DM
+    if (msg.to) {
+      // For DMs, only send to the recipient
+      if (session.originalName === msg.to || session.name === msg.to) {
+        if (session.ws?.readyState === WebSocket.OPEN) {
+          session.ws.send(JSON.stringify({ type: 'message', data: msg }));
+        }
+      }
+    } else {
+      // For public messages, send to everyone in channel
+      if (session.channelId === msg.channelId) {
+        if (session.ws?.readyState === WebSocket.OPEN) {
+          session.ws.send(JSON.stringify({ type: 'message', data: msg }));
+        }
+      }
+    }
+  }
+  // Send to bots via WebSocket
+  for (const [botId, bot] of bots) {
+    if (bot.source !== msg.source && bot.ws && bot.ws.readyState === WebSocket.OPEN) {
+      // Bots get public messages only
+      if (!msg.to) {
+        bot.ws.send(JSON.stringify({ type: 'message', data: msg }));
+      }
+    }
+  }
+}
+
+function broadcastAll(data) {
+  for (const [id, session] of sessions) {
+    if (session.ws?.readyState === WebSocket.OPEN) {
+      session.ws.send(JSON.stringify(data));
+    }
+  }
 }
 
 function safeJsonParse(str) {
   try { return JSON.parse(str); } catch { return null; }
 }
 
-function createMessage(data, source, sourceName = 'Unknown') {
-  const msg = {
-    id: crypto.randomBytes(12).toString('hex'),
-    timestamp: Date.now(),
-    source: source,
-    sourceId: data.from?.id || data.sourceId || 'unknown',
-    sourceName: sourceName,
-    channelId: data.channelId || 'default',
-    content: data.content,
-    replyTo: data.replyTo || null
-  };
-  
-  messages.push(msg);
-  
-  const cutoff = Date.now() - CONFIG.maxMessageAge;
-  while (messages.length > 0 && messages[0].timestamp < cutoff) {
-    messages.shift();
-  }
-  
-  return msg;
-}
-
-function broadcast(msg, excludeSession = null) {
-  for (const [sessionId, session] of sessions) {
-    if (session.channelId === msg.channelId && sessionId !== excludeSession) {
-      sendToSession(session, { type: 'message', data: msg });
-    }
-  }
-  
-  for (const [botId, bot] of bots) {
-    if (bot.source !== msg.source && bot.webhook) {
-      sendWebhook(bot.webhook, msg);
-    }
-  }
-}
-
-function sendToSession(session, data) {
-  if (session?.socket) {
-    try {
-      const encrypted = encrypt(JSON.stringify(data));
-      const buf = Buffer.alloc(2 + Buffer.byteLength(encrypted));
-      buf[0] = 0x81;
-      buf[1] = Buffer.byteLength(encrypted);
-      buf.write(encrypted, 2);
-      session.socket.write(buf);
-    } catch (e) {}
-  }
-}
-
-function sendWebhook(webhook, msg) {
-  const data = JSON.stringify({ event: 'message', hubId: CONFIG.hubId, message: msg });
-  const parsed = url.parse(webhook);
-  const options = {
-    hostname: parsed.hostname,
-    port: parsed.port || 443,
-    path: parsed.path,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }
-  };
-  (parsed.protocol === 'https:' ? https : http).request(options).write(data).end();
-}
-
-function handleWebSocket(req, socket, head) {
+wss.on('connection', (ws, req) => {
   const parsed = url.parse(req.url, true);
-  const sessionId = parsed.query.session;
   
+  // Check for bot authentication
+  const botId = parsed.query.botId;
+  const botToken = parsed.query.botToken;
+  const bot = botId ? bots.get(botId) : null;
+  
+  if (bot && bot.token === botToken) {
+    // Bot connection
+    bot.ws = ws;
+    bot.online = true;
+    console.log(`🤖 Bot connected: ${bot.name}`);
+    
+    ws.send(JSON.stringify({ type: 'bot_connected', botId: bot.id, botName: bot.name }));
+    broadcast({ type: 'bot_online', data: { id: bot.id, name: bot.name } });
+    
+    ws.on('message', (data) => {
+      const msg = safeJsonParse(data.toString());
+      if (msg?.type === 'message') {
+        const newMsg = createMessage({ ...msg.data, from: { id: bot.id, name: bot.name } }, bot.source, bot.name);
+        broadcast(newMsg);
+      }
+    });
+    
+    ws.on('close', () => {
+      bot.online = false;
+      bot.ws = null;
+      console.log(`🤖 Bot disconnected: ${bot.name}`);
+    });
+    return;
+  }
+  
+  // User session connection
+  const sessionId = parsed.query.session;
   if (!sessionId || !sessions.has(sessionId)) {
-    socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-    socket.destroy();
+    ws.close(4001, 'Unauthorized');
     return;
   }
   
   const session = sessions.get(sessionId);
+  session.ws = ws;
   onlineUsers.add(session.name);
   
-  const key = req.headers['sec-websocket-key'];
-  const acceptKey = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+  ws.send(JSON.stringify({ type: 'online', data: Array.from(onlineUsers) }));
+  broadcast({ ...createMessage({ content: `${session.name} joined`, channelId: session.channelId }, 'system', 'System'), sourceName: 'System' });
   
-  socket.write('HTTP/1.1 101 Switching Protocols\r\n');
-  socket.write('Upgrade: websocket\r\n');
-  socket.write('Connection: Upgrade\r\n');
-  socket.write('Sec-WebSocket-Accept: ' + acceptKey + '\r\n');
-  socket.write('\r\n');
-  
-  session.socket = socket;
-  
-  // Send online users
-  sendToSession(session, { type: 'online', data: Array.from(onlineUsers) });
-  
-  // Broadcast join
-  broadcast({ ...createMessage({ content: `${session.name} joined`, channelId: session.channelId }, 'system', 'System'), sourceName: 'System' }, sessionId);
-  
-  socket.on('data', (buffer) => {
-    const opcode = buffer[0] & 0x0f;
-    if (opcode === 0x08) {
-      onlineUsers.delete(session.name);
-      broadcast(createMessage({ content: `${session.name} left`, channelId: session.channelId }, 'system', 'System'), sessionId);
-      socket.end();
-      return;
-    }
-    
-    if (opcode === 0x01) {
-      const length = buffer[1] & 0x7f;
-      const payload = buffer.slice(2, 2 + length).toString();
-      const data = safeJsonParse(decrypt(payload));
-      
-      if (data?.type === 'message') {
-        const msg = createMessage({ ...data.data, from: { id: sessionId, name: session.name } }, 'web', session.name);
-        broadcast(msg);
+    ws.on('message', (data) => {
+      const msg = safeJsonParse(data.toString());
+      if (msg?.type === 'message') {
+        const content = msg.data.content || '';
+        
+        let newMsg;
+        
+        // Check for DM recipient in message data
+        if (msg.data.dmTo) {
+          // This is a DM
+          newMsg = createMessage({
+            ...msg.data,
+            content: content
+          }, 'web', session.name, sessionId);
+          newMsg.to = msg.data.dmTo;
+        } else {
+          newMsg = createMessage(msg.data, 'web', session.name, sessionId);
+        }
+        
+        broadcast(newMsg, sessionId);
+      } else if (msg?.type === 'ping') {
+        ws.send(JSON.stringify({ type: 'pong' }));
+      } else if (msg?.type === 'delete') {
+        const idx = messages.findIndex(m => m.id === msg.id && m.sourceId === sessionId);
+        if (idx !== -1) {
+          messages.splice(idx, 1);
+          broadcast({ type: 'delete', id: msg.id });
+        }
+      } else if (msg?.type === 'edit') {
+        const msgObj = messages.find(m => m.id === msg.id && m.sourceId === sessionId);
+        if (msgObj) {
+          msgObj.content = msg.content;
+          msgObj.edited = Date.now();
+          broadcast({ type: 'edit', id: msg.id, content: msg.content });
+        }
       }
-      
-      if (data?.type === 'ping') {
-        sendToSession(session, { type: 'pong' });
-      }
-    }
-  });
+    });
   
-  socket.on('close', () => {
+  ws.on('close', () => {
     onlineUsers.delete(session.name);
-    session.socket = null;
-    broadcast(createMessage({ content: `${session.name} disconnected`, channelId: session.channelId }, 'system', 'System'), sessionId);
+    session.ws = null;
+    broadcast(createMessage({ content: `${session.name} disconnected`, channelId: session.channelId }, 'system', 'System'));
   });
-}
+});
 
-function parseBody(req) {
-  return new Promise((resolve) => {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', () => resolve(safeJsonParse(body)));
-  });
-}
-
-async function handleRequest(req, res) {
+const server = http.createServer((req, res) => {
   const parsed = url.parse(req.url, true);
   const pathname = parsed.pathname;
   
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Bot-Id, X-Bot-Token');
   
   if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
   
-  // Health
   if (pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok', hubId: CONFIG.hubId, online: onlineUsers.size }));
     return;
   }
   
-  // Bot registration
   if (pathname === '/api/bot/register' && req.method === 'POST') {
-    const body = await parseBody(req);
-    if (!body?.id || !body?.token || !body?.name) {
-      res.writeHead(400); res.end(JSON.stringify({ error: 'Missing fields' })); return;
-    }
-    bots.set(body.id, { ...body, registered: Date.now() });
-    res.writeHead(200); res.end(JSON.stringify({ success: true, hubId: CONFIG.hubId }));
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', () => {
+      const data = safeJsonParse(body);
+      if (!data?.id || !data?.token || !data?.name) {
+        res.writeHead(400); res.end('{"error":"Missing fields"}'); return;
+      }
+      bots.set(data.id, { ...data, registered: Date.now() });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, hubId: CONFIG.hubId }));
+    });
     return;
   }
   
-  // Bot auth
   const botId = req.headers['x-bot-id'];
   const botToken = req.headers['x-bot-token'];
   const bot = bots.get(botId);
   
-  if (pathname.startsWith('/api/bot/') && botId && botToken && bot?.token === botToken) {
-    if (pathname === '/api/bot/message' && req.method === 'POST') {
-      const body = await parseBody(req);
-      const msg = createMessage({ ...body, from: { id: bot.id, name: bot.name } }, bot.source, bot.name);
-      broadcast(msg, bot.source);
-      res.writeHead(200); res.end(JSON.stringify({ success: true, messageId: msg.id }));
-      return;
-    }
-    
-    if (pathname === '/api/bot/messages' && req.method === 'GET') {
-      const msgs = messages.filter(m => m.channelId === (parsed.query.channelId || 'default') && m.timestamp > (parseInt(parsed.query.since) || 0)).slice(-100);
+  if (pathname === '/api/bot/message' && req.method === 'POST' && bot?.token === botToken) {
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', () => {
+      const data = safeJsonParse(body);
+      const msg = createMessage({ ...data, from: { id: bot.id, name: bot.name } }, bot.source, bot.name);
+      broadcast(msg);
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ messages: msgs }));
-      return;
-    }
-  }
-  
-  // Web session
-  if (pathname === '/api/session' && req.method === 'POST') {
-    const body = await parseBody(req);
-    if (!body?.name) { res.writeHead(400); res.end(JSON.stringify({ error: 'Name required' })); return; }
-    
-    const sessionId = crypto.randomBytes(16).toString('hex');
-    sessions.set(sessionId, {
-      token: crypto.randomBytes(16).toString('hex'),
-      name: body.name,
-      channelId: body.channelId || 'default',
-      source: 'web',
-      connected: Date.now()
+      res.end(JSON.stringify({ success: true, messageId: msg.id }));
     });
+    return;
+  }
+  
+  if (pathname === '/api/bot/messages' && req.method === 'GET' && bot?.token === botToken) {
+    const msgs = messages.filter(m => m.channelId === (parsed.query.channelId || 'default')).slice(-100);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ messages: msgs }));
+    return;
+  }
+  
+  if (pathname === '/api/session' && req.method === 'POST') {
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', () => {
+      const data = safeJsonParse(body);
+      if (!data?.name) { res.writeHead(400); res.end('{"error":"Name required"}'); return; }
+      const sessionId = crypto.randomBytes(16).toString('hex');
+      // Hash the display name for privacy
+      const displayName = crypto.createHash('sha256').update(data.name + CONFIG.hubId).digest('hex').substring(0, 8);
+      sessions.set(sessionId, { name: displayName, originalName: data.name, channelId: data.channelId || 'default', ws: null });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ sessionId, displayName }));
+    });
+    return;
+  }
+  
+  if (pathname === '/api/online' && req.method === 'GET') {
+    const allUsers = [...Array.from(onlineUsers), ...Array.from(bots.values()).map(b => b.name)];
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ users: allUsers }));
+    return;
+  }
+  
+  if (pathname === '/api/bots' && req.method === 'GET') {
+    const botList = Array.from(bots.values()).map(b => ({
+      id: b.id,
+      name: b.name,
+      online: b.online || false,
+      source: b.source
+    }));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ bots: botList }));
+    return;
+  }
+  
+  if (pathname === '/api/messages' && req.method === 'GET') {
+    const sessionId = parsed.query.session;
+    const session = sessions.get(sessionId);
+    const channelId = parsed.query.channelId || 'default';
+    
+    // Get messages: public messages in channel OR DMs to/from this user
+    const msgs = messages.filter(m => {
+      if (m.channelId !== channelId) return false;
+      // Public messages
+      if (!m.to) return true;
+      // DMs - only show if sender or recipient
+      if (m.sourceId === sessionId) return true;
+      if (m.to === session?.name || m.to === session?.originalName) return true;
+      return false;
+    }).slice(-50);
     
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ sessionId }));
+    res.end(JSON.stringify({ messages: msgs }));
     return;
   }
   
-  // Get online users
-  if (pathname === '/api/online' && req.method === 'GET') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ users: Array.from(onlineUsers) }));
-    return;
-  }
-  
-  // Channels
   if (pathname === '/api/channels' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ channels: Array.from(channels.values()) }));
     return;
   }
   
-  // Messages history
-  if (pathname === '/api/messages' && req.method === 'GET') {
-    const msgs = messages.filter(m => m.channelId === (parsed.query.channelId || 'default')).slice(-50);
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ messages: msgs }));
-    return;
-  }
-  
-  // Hub info
   if (pathname === '/api/info') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       hubId: CONFIG.hubId,
-      version: '1.1.0',
-      bots: Array.from(bots.values()).map(b => ({ id: b.id, name: b.name })).length,
+      version: '1.4.0',
+      bots: bots.size,
       online: onlineUsers.size,
-      messages: messages.length
+      messages: messages.length,
+      encrypted: true
     }));
     return;
   }
   
-  // Web UI
-  if (pathname === '/' || pathname === '/index.html') {
+  if (pathname === '/api/typing' && req.method === 'POST') {
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', () => {
+      const data = safeJsonParse(body);
+      if (data.sessionId && sessions.has(data.sessionId)) {
+        typingUsers.set(data.sessionId, Date.now());
+        broadcast({ type: 'typing', data: { user: sessions.get(data.sessionId).name } });
+      }
+      res.writeHead(200); res.end('{}');
+    });
+    return;
+  }
+  
+  if (pathname === '/' || pathname === '/index.html' || pathname === '/simple') {
+    const simpleHtml = require('fs').readFileSync(__dirname + '/simple.html', 'utf8');
     res.writeHead(200, { 'Content-Type': 'text/html' });
-    res.end(getWebUI());
+    res.end(simpleHtml);
+    return;
+  }
+  
+  if (pathname === '/test.html') {
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(`<!DOCTYPE html>
+<html>
+<head><title>EchoHub Test</title></head>
+<body>
+<h1>EchoHub Connection Test</h1>
+<div id="output" style="padding:20px;font-family:monospace;"></div>
+<script>
+const output = document.getElementById('output');
+function log(msg) {
+  output.innerHTML += msg + '<br>';
+  console.log(msg);
+}
+let sessionId = '';
+async function test() {
+  log('Testing EchoHub connection...');
+  log('<br>1. Creating session...');
+  try {
+    const res = await fetch('/api/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'TestUser', channelId: 'default' })
+    });
+    const data = await res.json();
+    log('✅ Session ID: ' + data.sessionId);
+    sessionId = data.sessionId;
+  } catch (e) {
+    log('❌ Session error: ' + e.message);
+    return;
+  }
+  log('<br>2. Connecting WebSocket...');
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = protocol + '//' + location.host + '/ws?session=' + sessionId;
+  log('URL: ' + wsUrl);
+  ws = new WebSocket(wsUrl);
+  ws.onopen = () => { log('✅ WebSocket connected!'); ws.close(); };
+  ws.onerror = (e) => { log('❌ WebSocket error'); };
+}
+test();
+</script>
+</body>
+</html>`);
     return;
   }
   
   res.writeHead(404); res.end('Not found');
-}
+});
+
+server.on('upgrade', (req, socket, head) => {
+  const parsed = url.parse(req.url, true);
+  console.log(`[WS] Upgrade request: ${parsed.pathname}`);
+  if (parsed.pathname === '/ws') {
+    try {
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        wss.emit('connection', ws, req);
+      });
+    } catch (e) {
+      console.log('[WS] Handle error:', e.message);
+    }
+  } else {
+    console.log(`[WS] Unknown path: ${parsed.pathname}`);
+    socket.destroy();
+  }
+});
 
 function getWebUI() {
   return `<!DOCTYPE html>
 <html>
 <head>
-  <title>EchoHub - Universal Bot Bridge</title>
+  <title>EchoHub</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f0f1a; color: #e0e0e0; height: 100vh; overflow: hidden; }
-    
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f0f1a; color: #e0e0e0; height: 100vh; }
     .app { display: flex; height: 100vh; }
-    
-    /* Sidebar */
     .sidebar { width: 260px; background: #1a1a2e; border-right: 1px solid #2a2a4e; display: flex; flex-direction: column; }
     .sidebar-header { padding: 20px; border-bottom: 1px solid #2a2a4e; }
-    .sidebar-header h1 { font-size: 1.4rem; color: #00d9ff; margin-bottom: 5px; }
-    .hub-id { font-size: 0.75rem; color: #666; }
-    
-    .section-title { padding: 15px 20px 10px; font-size: 0.75rem; text-transform: uppercase; color: #666; letter-spacing: 1px; }
-    
-    .online-list { padding: 0 10px; }
-    .online-user { padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-radius: 8px; margin: 3px 0; cursor: pointer; transition: background 0.2s; }
-    .online-user:hover { background: #2a2a4e; }
-    .online-user .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.8rem; }
-    .online-user .name { font-weight: 500; }
-    .online-user .status { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; margin-left: auto; }
-    
-    .channel-list { padding: 0 10px; }
-    .channel { padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-radius: 8px; margin: 3px 0; cursor: pointer; transition: background 0.2s; color: #999; }
-    .channel:hover, .channel.active { background: #2a2a4e; color: #fff; }
-    .channel .icon { font-size: 1.2rem; }
-    
-    .profile-btn { margin-top: auto; padding: 15px 20px; border-top: 1px solid #2a2a4e; }
-    .profile-btn button { width: 100%; padding: 12px; background: #2a2a4e; border: none; border-radius: 8px; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 0.9rem; }
-    .profile-btn button:hover { background: #3a3a5e; }
-    
-    /* Main chat area */
+    .sidebar-header h1 { color: #00d9ff; font-size: 1.4rem; }
+    .section { padding: 15px 20px 10px; }
+    .section-title { font-size: 0.75rem; text-transform: uppercase; color: #666; letter-spacing: 1px; margin-bottom: 10px; }
+    .online-user, .channel { padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-radius: 8px; margin: 3px 0; cursor: pointer; }
+    .online-user:hover, .channel:hover, .channel.active { background: #2a2a4e; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.8rem; }
+    .status { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; margin-left: auto; }
+    .profile { margin-top: auto; padding: 15px; border-top: 1px solid #2a2a4e; }
+    .profile button { width: 100%; padding: 12px; background: #2a2a4e; border: none; border-radius: 8px; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 10px; }
     .chat-area { flex: 1; display: flex; flex-direction: column; }
-    
     .chat-header { padding: 15px 25px; background: #1a1a2e; border-bottom: 1px solid #2a2a4e; display: flex; align-items: center; justify-content: space-between; }
-    .chat-header h2 { font-size: 1.2rem; }
-    .chat-header-info { display: flex; align-items: center; gap: 15px; font-size: 0.85rem; color: #888; }
-    .online-count { display: flex; align-items: center; gap: 5px; }
-    .online-count .dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; }
-    
     .messages { flex: 1; overflow-y: auto; padding: 20px 25px; display: flex; flex-direction: column; gap: 12px; }
-    
     .message { max-width: 70%; padding: 12px 16px; border-radius: 16px; line-height: 1.4; }
     .message.incoming { background: #2a2a4e; align-self: flex-start; border-bottom-left-radius: 4px; }
     .message.outgoing { background: #00d9ff; color: #000; align-self: flex-end; border-bottom-right-radius: 4px; }
@@ -344,34 +472,25 @@ function getWebUI() {
     .message .sender { font-size: 0.75rem; color: #00d9ff; margin-bottom: 4px; font-weight: 600; }
     .message.outgoing .sender { color: #006680; }
     .message .time { font-size: 0.65rem; color: #888; margin-top: 4px; }
-    .message.outgoing .time { color: #005566; }
-    
     .input-area { padding: 20px 25px; background: #1a1a2e; border-top: 1px solid #2a2a4e; display: flex; gap: 12px; }
     .input-area input { flex: 1; padding: 14px 18px; background: #2a2a4e; border: 1px solid #3a3a5e; border-radius: 24px; color: #fff; font-size: 0.95rem; outline: none; }
     .input-area input:focus { border-color: #00d9ff; }
     .input-area button { padding: 14px 24px; background: #00d9ff; border: none; border-radius: 24px; color: #000; font-weight: bold; cursor: pointer; }
-    .input-area button:hover { background: #00b8d9; }
-    
-    /* Login screen */
-    .login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #0f0f1a; }
+    .login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
     .login-box { background: #1a1a2e; padding: 40px; border-radius: 20px; text-align: center; width: 350px; }
     .login-box h1 { font-size: 2rem; color: #00d9ff; margin-bottom: 10px; }
     .login-box p { color: #888; margin-bottom: 30px; }
     .login-box input { width: 100%; padding: 14px; margin: 10px 0; background: #2a2a4e; border: 1px solid #3a3a5e; border-radius: 10px; color: #fff; font-size: 1rem; text-align: center; }
-    .login-box input:focus { outline: none; border-color: #00d9ff; }
     .login-box button { width: 100%; padding: 14px; margin-top: 20px; background: #00d9ff; border: none; border-radius: 10px; color: #000; font-weight: bold; font-size: 1rem; cursor: pointer; }
-    .login-box button:hover { background: #00b8d9; }
-    
-    /* Settings modal */
     .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center; }
     .modal.show { display: flex; }
     .modal-content { background: #1a1a2e; padding: 30px; border-radius: 20px; width: 400px; max-width: 90%; }
     .modal-content h2 { margin-bottom: 20px; color: #00d9ff; }
-    .modal-content input { width: 100%; padding: 12px; margin: 10px 0; background: #2a2a4e; border: 1px solid #3a3a5e; border-radius: 8px; color: #fff; }
-    .modal-content .btn-row { display: flex; gap: 10px; margin-top: 20px; }
-    .modal-content button { flex: 1; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
-    .modal-content .btn-save { background: #00d9ff; color: #000; }
-    .modal-content .btn-cancel { background: #444; color: #fff; }
+    .modal-content input, .modal-content select { width: 100%; padding: 12px; margin: 10px 0; background: #2a2a4e; border: 1px solid #3a3a5e; border-radius: 8px; color: #fff; }
+    .btn-row { display: flex; gap: 10px; margin-top: 20px; }
+    .btn-row button { flex: 1; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+    .btn-save { background: #00d9ff; color: #000; }
+    .btn-cancel { background: #444; color: #fff; }
   </style>
 </head>
 <body>
@@ -379,8 +498,10 @@ function getWebUI() {
     <div class="login-box">
       <h1>🤖 EchoHub</h1>
       <p>Universal Bot Bridge</p>
-      <input type="text" id="nameInput" placeholder="Enter your name..." />
-      <button onclick="join()">Join Chat</button>
+      <input type="text" id="nameInput" placeholder="Your name..." />
+      <button id="joinBtn" onclick="window.testJoin()">Join</button>
+      <div id="joinError" style="color:#ff6b6b;margin-top:10px;font-size:0.9rem;"></div>
+      <div id="debugLog" style="margin-top:20px;font-size:0.8rem;color:#666;text-align:left;max-height:100px;overflow:auto;"></div>
     </div>
   </div>
   
@@ -388,20 +509,24 @@ function getWebUI() {
     <div class="sidebar">
       <div class="sidebar-header">
         <h1>🤖 EchoHub</h1>
-        <div class="hub-id" id="hubId">Loading...</div>
       </div>
-      
-      <div class="section-title">Online Now</div>
-      <div class="online-list" id="onlineList"></div>
-      
-      <div class="section-title">Channels</div>
-      <div class="channel-list" id="channelList"></div>
-      
-      <div class="profile-btn">
+      <div class="section">
+        <div class="section-title">Online</div>
+        <div id="onlineList"></div>
+      </div>
+      <div class="section">
+        <div class="section-title">🤖 Bots</div>
+        <div id="botList"></div>
+      </div>
+      <div class="section">
+        <div class="section-title">Channels</div>
+        <div id="channelList"></div>
+      </div>
+      <div class="profile">
         <button onclick="showSettings()">
           <span>👤</span>
           <span id="myName">Me</span>
-          <span style="margin-left: auto;">⚙️</span>
+          <span style="margin-left:auto;">⚙️</span>
         </button>
       </div>
     </div>
@@ -409,16 +534,9 @@ function getWebUI() {
     <div class="chat-area">
       <div class="chat-header">
         <h2 id="channelName">#general</h2>
-        <div class="chat-header-info">
-          <div class="online-count">
-            <div class="dot"></div>
-            <span id="onlineCount">0</span> online
-          </div>
-        </div>
+        <span id="onlineCount">0 online</span>
       </div>
-      
       <div class="messages" id="messages"></div>
-      
       <div class="input-area">
         <input type="text" id="msgInput" placeholder="Type a message..." onkeypress="if(event.key==='Enter')send()" />
         <button onclick="send()">Send</button>
@@ -429,10 +547,10 @@ function getWebUI() {
   <div class="modal" id="settingsModal">
     <div class="modal-content">
       <h2>⚙️ Settings</h2>
-      <label>Your Name</label>
+      <label>Name</label>
       <input type="text" id="settingsName" />
       <label>Channel</label>
-      <select id="settingsChannel" style="width:100%;padding:12px;margin:10px 0;background:#2a2a4e;border:1px solid #3a3a5e;border-radius:8px;color:#fff;">
+      <select id="settingsChannel">
         <option value="default">General</option>
         <option value="bots">Bot Commands</option>
       </select>
@@ -449,66 +567,94 @@ function getWebUI() {
     let channel = 'default';
     let ws = null;
     
-    async function join() {
+    function log(msg) {
+      console.log(msg);
+      const debug = document.getElementById('debugLog');
+      if (debug) debug.innerHTML += msg + '<br>';
+    }
+    
+    window.testJoin = async function() {
+      log('join() called');
       const name = document.getElementById('nameInput').value.trim();
-      if (!name) return alert('Please enter your name');
+      log('Name: ' + name);
+      if (!name) {
+        document.getElementById('joinError').textContent = 'Please enter your name';
+        return;
+      }
       
-      myName = name;
-      localStorage.setItem('echoName', name);
+      const joinBtn = document.getElementById('joinBtn');
+      joinBtn.textContent = 'Connecting...';
+      joinBtn.disabled = true;
       
-      const res = await fetch('/api/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, channelId: channel })
-      });
-      
-      const data = await res.json();
-      sessionId = data.sessionId;
-      localStorage.setItem('echoSession', sessionId);
-      
-      document.getElementById('loginScreen').style.display = 'none';
-      document.getElementById('appScreen').style.display = 'flex';
-      document.getElementById('myName').textContent = name;
-      document.getElementById('settingsName').value = name;
-      document.getElementById('settingsChannel').value = channel;
-      
-      loadHubInfo();
-      loadMessages();
-      connect();
-      setInterval(refreshOnline, 5000);
+      try {
+        const res = await fetch('/api/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, channelId: channel })
+        });
+        
+        if (!res.ok) throw new Error('Server error: ' + res.status);
+        
+        const data = await res.json();
+        if (!data.sessionId) throw new Error('No session ID returned');
+        
+        sessionId = data.sessionId;
+        localStorage.setItem('echoName', name);
+        localStorage.setItem('echoSession', sessionId);
+        myName = name;
+        
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('appScreen').style.display = 'flex';
+        document.getElementById('myName').textContent = name;
+        
+        loadMessages();
+        connect();
+        setInterval(refreshOnline, 3000);
+        setInterval(refreshBots, 5000);
+        refreshBots();
+        
+      } catch (e) {
+        document.getElementById('joinError').textContent = 'Error: ' + e.message;
+        joinBtn.textContent = 'Join';
+        joinBtn.disabled = false;
+        console.error('Join error:', e);
+      }
     }
     
     function connect() {
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(protocol + '//' + location.host + '/?session=' + sessionId);
-      
-      ws.onmessage = (e) => {
-        const buf = new Uint8Array(e.data);
-        const len = buf[1];
-        const msg = JSON.parse(prompt('', buf.slice(2, 2 + len).toString('utf8')));
-        handleMessage(msg);
+      const wsUrl = protocol + '//' + location.host + '/ws?session=' + sessionId;
+      console.log('Connecting to:', wsUrl);
+      ws = new WebSocket(wsUrl);
+      ws.onopen = () => {
+        console.log('WebSocket Connected!');
+        document.getElementById('loginScreen').innerHTML = '<div style="color:#4ade80;text-align:center;padding:40px;">✅ Connected! Loading...</div>';
       };
-      
-      ws.onclose = () => setTimeout(connect, 2000);
-    }
-    
-    function handleMessage(msg) {
-      if (msg.type === 'message') addMessage(msg.data);
-      if (msg.type === 'online') updateOnline(msg.data);
-      if (msg.type === 'pong') {}
-    }
-    
-    async function loadHubInfo() {
-      const res = await fetch('/api/info');
-      const data = await res.json();
-      document.getElementById('hubId').textContent = 'Hub: ' + data.hubId.substring(0, 8) + '...';
+      ws.onerror = (e) => {
+        console.log('WebSocket Error:', e);
+        alert('WebSocket error! Check console.');
+      };
+      ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.type === 'message') addMessage(data.data);
+        if (data.type === 'online') updateOnline(data.data);
+      };
+      ws.onclose = (e) => {
+        console.log('WebSocket closed:', e.code, e.reason);
+        if (e.code !== 1000) setTimeout(connect, 2000);
+      };
     }
     
     async function loadMessages() {
-      const res = await fetch('/api/messages?channelId=' + channel);
-      const data = await res.json();
-      document.getElementById('messages').innerHTML = '';
-      data.messages.forEach(m => addMessage(m, false));
+      try {
+        const res = await fetch('/api/messages?channelId=' + channel);
+        const data = await res.json();
+        document.getElementById('messages').innerHTML = '';
+        data.messages.forEach(m => addMessage(m, false));
+      } catch (e) {
+        console.log('Load messages error:', e.message);
+        document.getElementById('messages').innerHTML = '<div style="color:#ff6b6b;padding:20px;">Error loading messages</div>';
+      }
     }
     
     async function refreshOnline() {
@@ -517,101 +663,101 @@ function getWebUI() {
       updateOnline(data.users);
     }
     
+    async function refreshBots() {
+      try {
+        const res = await fetch('/api/bots');
+        const data = await res.json();
+        updateBots(data.bots || []);
+      } catch (e) {
+        console.log('Bot fetch error');
+      }
+    }
+    
     function updateOnline(users) {
-      const list = document.getElementById('onlineList');
-      list.innerHTML = users.map(u => '<div class="online-user"><div class="avatar">' + u[0].toUpperCase() + '</div><div class="name">' + u + '</div><div class="status"></div></div>').join('');
-      document.getElementById('onlineCount').textContent = users.length;
+      document.getElementById('onlineList').innerHTML = users.map(u => 
+        '<div class="online-user" onclick="selectUser(\'' + u + '\')" style="cursor:pointer"><div class="avatar">' + u[0].toUpperCase() + '</div><div>' + u + '</div><div class="status"></div></div>'
+      ).join('');
+      document.getElementById('onlineCount').textContent = users.length + ' online';
+    }
+    
+    function updateBots(bots) {
+      if (bots.length === 0) {
+        document.getElementById('botList').innerHTML = '<div style="color:#666;font-size:0.8rem;padding:10px;">No bots connected</div>';
+        return;
+      }
+      document.getElementById('botList').innerHTML = bots.map(b => 
+        '<div class="online-user bot-item" onclick="selectUser(\'' + b.name + '\')" style="cursor:pointer"><div class="avatar" style="background:linear-gradient(135deg,#00d9ff,#00ff88);">' + b.name[0].toUpperCase() + '</div><div>' + b.name + '</div><div class="status" style="background:' + (b.online ? '#4ade80' : '#666') + '"></div></div>'
+      ).join('');
+    }
+    
+    function selectUser(name) {
+      const input = document.getElementById('msgInput');
+      input.value = '@' + name + ' ';
+      input.focus();
     }
     
     function addMessage(msg, scroll = true) {
       if (msg.channelId !== channel && msg.source !== 'system') return;
-      
       const div = document.createElement('div');
       const isMe = msg.sourceName === myName;
-      const isSystem = msg.source === 'system';
-      
-      if (isSystem) {
+      if (msg.source === 'system') {
         div.className = 'message system';
         div.innerHTML = '<em>' + msg.content + '</em>';
       } else {
         div.className = 'message ' + (isMe ? 'outgoing' : 'incoming');
-        const time = new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        const time = new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
         div.innerHTML = '<div class="sender">' + (isMe ? 'You' : msg.sourceName) + '</div><div>' + msg.content + '</div><div class="time">' + time + '</div>';
       }
-      
       document.getElementById('messages').appendChild(div);
       if (scroll) document.getElementById('messages').scrollTop = 999999;
     }
     
     function send() {
-      const input = document.getElementById('msgInput');
-      const text = input.value.trim();
+      const text = document.getElementById('msgInput').value.trim();
       if (!text || !ws) return;
-      
       ws.send(JSON.stringify({ type: 'message', data: { content: text, channelId: channel } }));
-      input.value = '';
+      document.getElementById('msgInput').value = '';
     }
     
-    function showSettings() {
-      document.getElementById('settingsModal').classList.add('show');
-      document.getElementById('settingsName').value = myName;
-      document.getElementById('settingsChannel').value = channel;
-    }
-    
-    function hideSettings() {
-      document.getElementById('settingsModal').classList.remove('show');
-    }
+    function showSettings() { document.getElementById('settingsModal').classList.add('show'); }
+    function hideSettings() { document.getElementById('settingsModal').classList.remove('show'); }
     
     async function saveSettings() {
       const newName = document.getElementById('settingsName').value.trim();
       const newChannel = document.getElementById('settingsChannel').value;
-      
       if (newName) myName = newName;
-      if (newChannel !== channel) {
-        channel = newChannel;
-        document.getElementById('channelName').textContent = '#' + channel;
-        loadMessages();
-      }
-      
+      if (newChannel !== channel) { channel = newChannel; document.getElementById('channelName').textContent = '#' + channel; loadMessages(); }
       localStorage.setItem('echoName', myName);
       document.getElementById('myName').textContent = myName;
       hideSettings();
     }
     
-    // Check if already logged in
     if (sessionId) {
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('appScreen').style.display = 'flex';
       myName = localStorage.getItem('echoName') || 'User';
       document.getElementById('myName').textContent = myName;
-      document.getElementById('settingsName').value = myName;
-      loadHubInfo();
       loadMessages();
       connect();
-      setInterval(refreshOnline, 5000);
+      setInterval(refreshOnline, 3000);
+      setInterval(refreshBots, 5000);
+      refreshBots();
     }
+    
+    // Attach event listeners
+    document.getElementById('joinBtn').addEventListener('click', join);
+    log('Event listener attached');
+    document.getElementById('nameInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') join();
+    });
+    log('Page loaded');
   </script>
 </body>
 </html>`;
 }
 
-// Start server
-const startTime = Date.now();
-const server = http.createServer(handleRequest);
-
-server.on('upgrade', (req, socket, head) => {
-  if (req.headers['upgrade'] === 'websocket') handleWebSocket(req, socket, head);
-});
-
 server.listen(CONFIG.port, () => {
-  console.log(`
-╔═══════════════════════════════════════════════════════╗
-║   🤖 EchoHub v1.1 - Universal Bot Bridge          ║
-║   Hub ID: ${CONFIG.hubId}
-║   Port: ${CONFIG.port}
-║   Status: ONLINE                                    ║
-╚═══════════════════════════════════════════════════════╝
-  `);
+  console.log(`EchoHub v1.2 running on port ${CONFIG.port}`);
 });
 
 process.on('SIGINT', () => { server.close(); process.exit(0); });

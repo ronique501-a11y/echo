@@ -6,6 +6,7 @@
 const http = require('http');
 const https = require('https');
 const url = require('url');
+const WebSocket = require('ws');
 
 class EchoBot {
   constructor(config) {
@@ -13,11 +14,14 @@ class EchoBot {
     this.token = config.token;
     this.name = config.name || 'Bot';
     this.hubUrl = config.hubUrl || 'http://localhost:3847';
+    this.wsUrl = config.wsUrl || config.hubUrl.replace('http', 'ws') + '/ws';
     this.source = config.source || 'bot';
     this.channels = config.channels || ['default'];
     this.webhook = config.webhook || null;
     this.onMessage = config.onMessage || (() => {});
     this.lastMessageTime = 0;
+    this.ws = null;
+    this.usingWebSocket = false;
     
     this.registered = false;
   }
@@ -92,13 +96,19 @@ class EchoBot {
     }
   }
   
-  // Send a message
+  // Send a message (tries WebSocket first, falls back to HTTP)
   async send(content, options = {}) {
     if (!this.registered) {
       console.log('⚠️ Bot not registered, attempting registration...');
       await this.register();
     }
     
+    // Try WebSocket first for real-time
+    if (this.sendWebSocket(content, options)) {
+      return { success: true, via: 'websocket' };
+    }
+    
+    // Fall back to HTTP
     try {
       const result = await this.request('/api/bot/message', 'POST', {
         content: content,
@@ -108,7 +118,7 @@ class EchoBot {
         metadata: options.metadata || {}
       });
       
-      return result;
+      return { ...result, via: 'http' };
     } catch (e) {
       console.log('❌ Send error:', e.message);
       return { error: e.message };
@@ -150,6 +160,85 @@ class EchoBot {
     }
   }
   
+  // Connect via WebSocket for real-time messaging
+  connectWebSocket() {
+    return new Promise((resolve, reject) => {
+      const wsUrl = `${this.wsUrl}?botId=${this.id}&botToken=${this.token}`;
+      console.log(`🔌 Connecting WebSocket to ${wsUrl}`);
+      
+      try {
+        this.ws = new WebSocket(wsUrl);
+        
+        this.ws.on('open', () => {
+          console.log(`✅ WebSocket connected for ${this.name}`);
+          this.usingWebSocket = true;
+          resolve();
+        });
+        
+        this.ws.on('message', (data) => {
+          try {
+            const msg = JSON.parse(data.toString());
+            if (msg.type === 'message') {
+              this.onMessage(msg.data);
+            } else if (msg.type === 'bot_connected') {
+              console.log(`🤖 Hub acknowledged bot: ${msg.botName}`);
+            }
+          } catch (e) {
+            console.log('WebSocket message parse error:', e.message);
+          }
+        });
+        
+        this.ws.on('error', (e) => {
+          console.log(`❌ WebSocket error: ${e.message}`);
+          this.usingWebSocket = false;
+          reject(e);
+        });
+        
+        this.ws.on('close', () => {
+          console.log(`🔌 WebSocket disconnected for ${this.name}`);
+          this.usingWebSocket = false;
+          // Auto-reconnect after 5 seconds
+          setTimeout(() => {
+            if (this.registered) {
+              console.log(`🔄 Reconnecting WebSocket...`);
+              this.connectWebSocket().catch(() => {});
+            }
+          }, 5000);
+        });
+        
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+  
+  // Disconnect WebSocket
+  disconnectWebSocket() {
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+      this.usingWebSocket = false;
+    }
+  }
+  
+  // Send via WebSocket (real-time)
+  sendWebSocket(content, options = {}) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'message',
+        data: {
+          content: content,
+          channelId: options.channelId || 'default',
+          replyTo: options.replyTo || null,
+          attachments: options.attachments || [],
+          metadata: options.metadata || {}
+        }
+      }));
+      return true;
+    }
+    return false;
+  }
+  
   // Update bot info
   async update(info) {
     try {
@@ -172,6 +261,21 @@ class EchoBot {
     } catch (e) {
       return { error: e.message };
     }
+  }
+  
+  // Connect with WebSocket (register + connect)
+  async connect() {
+    const registered = await this.register();
+    if (registered) {
+      try {
+        await this.connectWebSocket();
+        return { success: true, websocket: true };
+      } catch (e) {
+        console.log('WebSocket connection failed, using HTTP polling');
+        return { success: true, websocket: false };
+      }
+    }
+    return { success: false };
   }
   
   // Direct speak (like me sending to Mia on Telegram)
