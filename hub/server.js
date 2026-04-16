@@ -202,6 +202,10 @@ wss.on('connection', (ws, req) => {
         }
         
         broadcast(newMsg, sessionId);
+        // Also send to sender so they see their own message
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'message', data: newMsg }));
+        }
       } else if (msg?.type === 'ping') {
         ws.send(JSON.stringify({ type: 'pong' }));
       } else if (msg?.type === 'delete') {
