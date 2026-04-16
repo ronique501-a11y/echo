@@ -1,0 +1,14 @@
+{
+  "hub": {
+    "port": 3847,
+    "encryptionKey": "change-this-to-a-random-key-in-production"
+  },
+  "telegram": {
+    "botToken": "YOUR_TELEGRAM_BOT_TOKEN",
+    "chatId": "YOUR_CHAT_ID",
+    "hubBotToken": "generate-a-secure-token-for-this-bot"
+  },
+  "web": {
+    "enabled": true
+  }
+}
