@@ -243,17 +243,28 @@
     // Send message
     sendBtn.addEventListener('click', function() {
       const text = msgInput.value.trim();
-      if (!text || !ws) return;
+      if (!text) return;
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        errorDiv.textContent = 'Not connected. Reconnecting...';
+        errorDiv.style.color = '#ff6b6b';
+        connectWS();
+        return;
+      }
       
-      const msgData = { content: text };
+      const msgData = { content: text, channelId: channel };
       
       // If in DM mode, send as private
       if (currentDm) {
         msgData.dmTo = currentDm;
       }
       
-      ws.send(JSON.stringify({ type: 'message', data: msgData }));
-      msgInput.value = '';
+      try {
+        ws.send(JSON.stringify({ type: 'message', data: msgData }));
+        msgInput.value = '';
+      } catch (e) {
+        errorDiv.textContent = 'Send error: ' + e.message;
+        errorDiv.style.color = '#ff6b6b';
+      }
     });
     
     // Enter key to send
