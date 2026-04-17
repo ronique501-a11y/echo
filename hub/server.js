@@ -68,6 +68,80 @@ const messages = [];
 const onlineUsers = new Set();
 const typingUsers = new Map();
 
+// Session contexts (persistent memory per user)
+const contexts = new Map();
+const contextDir = path.join(__dirname, '..', 'contexts');
+
+// Ensure context directory exists
+try { fs.mkdirSync(contextDir, { recursive: true }); } catch (e) {}
+
+function getContextPath(userName) {
+  const safeName = userName.replace(/[^a-zA-Z0-9]/g, '_');
+  return path.join(contextDir, `${safeName}.json`);
+}
+
+function loadContext(userName) {
+  const ctxPath = getContextPath(userName);
+  try {
+    if (fs.existsSync(ctxPath)) {
+      return JSON.parse(fs.readFileSync(ctxPath, 'utf8'));
+    }
+  } catch (e) {}
+  return {
+    userName,
+    messages: [],
+    lastActive: Date.now(),
+    metadata: {}
+  };
+}
+
+function saveContext(ctx) {
+  const ctxPath = getContextPath(ctx.userName);
+  ctx.lastActive = Date.now();
+  try {
+    fs.writeFileSync(ctxPath, JSON.stringify(ctx));
+  } catch (e) {
+    error('context', 'Failed to save context', { userName: ctx.userName, error: e.message });
+  }
+}
+
+function addToContext(userName, role, content, metadata = {}) {
+  let ctx = contexts.get(userName);
+  if (!ctx) {
+    ctx = loadContext(userName);
+    contexts.set(userName, ctx);
+  }
+  
+  ctx.messages.push({
+    role,
+    content,
+    timestamp: Date.now(),
+    ...metadata
+  });
+  
+  // Keep last 100 messages in context
+  if (ctx.messages.length > 100) {
+    ctx.messages = ctx.messages.slice(-100);
+  }
+  
+  saveContext(ctx);
+  return ctx;
+}
+
+function getContext(userName) {
+  let ctx = contexts.get(userName);
+  if (!ctx) {
+    ctx = loadContext(userName);
+    contexts.set(userName, ctx);
+  }
+  return ctx;
+}
+
+function getContextHistory(userName, limit = 20) {
+  const ctx = getContext(userName);
+  return ctx.messages.slice(-limit);
+}
+
 // Rate limiting
 const rateLimits = new Map();
 
@@ -262,6 +336,13 @@ wss.on('connection', (ws, req, sessionId) => {
   if (CONFIG.verbose) info('ws', 'Client connected', { sessionId: sessionId.substring(0, 8), name: session.name });
   
   ws.send(JSON.stringify({ type: 'online', data: Array.from(onlineUsers) }));
+  
+  // Send context history to user
+  const history = getContextHistory(session.name, 20);
+  if (history.length > 0) {
+    ws.send(JSON.stringify({ type: 'context', data: { history, userName: session.name } }));
+  }
+  
   broadcast(createMessage({ content: `${session.name} joined`, channelId: session.channelId }, 'system', 'System'));
   
   startHeartbeat(ws, session);
@@ -295,6 +376,9 @@ wss.on('connection', (ws, req, sessionId) => {
       
       messages.push(newMsg);
       broadcast(newMsg, sessionId);
+      
+      // Add to user's persistent context
+      addToContext(session.name, 'user', content, { sessionId, messageId: newMsg.id });
       
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'message', data: newMsg }));
@@ -523,6 +607,59 @@ const server = http.createServer((req, res) => {
     }));
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ bots: botList }));
+    return;
+  }
+  
+  // Context - get user's conversation history
+  if (pathname.startsWith('/api/context/') && req.method === 'GET') {
+    const userName = pathname.split('/')[3]; // /api/context/{username}
+    if (!userName) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end('{"error":"Username required"}');
+      return;
+    }
+    const limit = parseInt(parsed.query.limit) || 50;
+    const history = getContextHistory(userName, limit);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ userName, history, count: history.length }));
+    return;
+  }
+  
+  // Context - add message to context
+  if (pathname === '/api/context' && req.method === 'POST') {
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', () => {
+      const data = safeJsonParse(body);
+      if (!data?.userName || !data?.role || !data?.content) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end('{"error":"Missing userName, role, or content"}');
+        return;
+      }
+      const ctx = addToContext(data.userName, data.role, data.content, data.metadata || {});
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, messageCount: ctx.messages.length }));
+    });
+    return;
+  }
+  
+  // Context - list all users with context
+  if (pathname === '/api/contexts' && req.method === 'GET') {
+    try {
+      const files = fs.readdirSync(contextDir);
+      const users = files
+        .filter(f => f.endsWith('.json'))
+        .map(f => {
+          const name = f.replace('.json', '').replace(/_/g, ' ');
+          const ctx = JSON.parse(fs.readFileSync(path.join(contextDir, f), 'utf8'));
+          return { userName: ctx.userName, messageCount: ctx.messages.length, lastActive: ctx.lastActive };
+        });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ contexts: users }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end('{"error":"Failed to list contexts"}');
+    }
     return;
   }
   

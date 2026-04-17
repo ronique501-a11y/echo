@@ -559,6 +559,26 @@
           const el = document.getElementById('msg-' + data.id);
           if (el) el.querySelector('.msg-content').textContent = data.content;
         }
+        if (data.type === 'context') {
+          // Load conversation history
+          if (data.data && data.data.history) {
+            const historyInfo = document.createElement('div');
+            historyInfo.className = 'message system';
+            historyInfo.innerHTML = '<em>--- Loading ' + data.data.history.length + ' previous messages ---</em>';
+            messagesDiv.appendChild(historyInfo);
+            
+            data.data.history.forEach(h => {
+              if (h.role === 'user' || h.role === 'assistant') {
+                const msgEl = document.createElement('div');
+                msgEl.className = 'message ' + (h.role === 'user' ? 'outgoing' : 'incoming');
+                msgEl.innerHTML = '<div class="sender">' + (h.role === 'user' ? 'You' : myName) + '</div><div class="msg-content">' + h.content + '</div>';
+                messagesDiv.appendChild(msgEl);
+              }
+            });
+            
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+          }
+        }
       };
       
       ws.onerror = function() {
