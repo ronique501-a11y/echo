@@ -530,6 +530,7 @@
     
     async function connectWS() {
       if (!sessionId) return;
+      if (ws && ws.readyState === WebSocket.CONNECTING) return;
       
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = protocol + '//' + location.host + '/ws?session=' + sessionId;
@@ -537,6 +538,13 @@
       if (!wasConnected) {
         statusDiv.textContent = 'Connecting...';
       }
+      
+      // Close existing connection if any
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+      }
+      
       ws = new WebSocket(wsUrl);
       
       ws.onopen = function() {
@@ -553,16 +561,16 @@
         if (window.botsInterval) clearInterval(window.botsInterval);
         
         // Set intervals
-        window.onlineInterval = setInterval(refreshOnline, 3000);
-        window.botsInterval = setInterval(refreshBots, 5000);
+        window.onlineInterval = setInterval(refreshOnline, 5000);
+        window.botsInterval = setInterval(refreshBots, 10000);
         refreshBots();
         
-        // Keepalive ping every 25 seconds
+        // Keepalive ping every 30 seconds
         pingInterval = setInterval(() => {
           if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'ping' }));
           }
-        }, 25000);
+        }, 30000);
       };
       
       ws.onmessage = function(e) {
@@ -579,25 +587,7 @@
           const el = document.getElementById('msg-' + data.id);
           if (el) el.querySelector('.msg-content').textContent = data.content;
         }
-        if (data.type === 'context') {
-          if (data.data && data.data.history) {
-            const historyInfo = document.createElement('div');
-            historyInfo.className = 'message system';
-            historyInfo.innerHTML = '<em>--- Loaded ' + data.data.history.length + ' previous messages ---</em>';
-            messagesDiv.appendChild(historyInfo);
-            
-            data.data.history.forEach(h => {
-              if (h.role === 'user' || h.role === 'assistant') {
-                const msgEl = document.createElement('div');
-                msgEl.className = 'message ' + (h.role === 'user' ? 'outgoing' : 'incoming');
-                msgEl.innerHTML = '<div class="sender">' + (h.role === 'user' ? 'You' : myName) + '</div><div class="msg-content">' + h.content + '</div>';
-                messagesDiv.appendChild(msgEl);
-              }
-            });
-            
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-          }
-        }
+        // Context messages are already included in /api/messages - don't duplicate
       };
       
       ws.onerror = function() {
@@ -618,17 +608,17 @@
           reconnectAttempts++;
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
           setTimeout(connectWS, delay);
-        } else if (!wasConnected && sessionId) {
-          // Silent reconnect attempt
-          setTimeout(connectWS, 1000);
+        } else if (!wasConnected && sessionId && reconnectAttempts < 3) {
+          // Silent reconnect attempt only 3 times
+          reconnectAttempts++;
+          setTimeout(connectWS, 1000 * reconnectAttempts);
         }
       };
     }
     
-    // Page visibility handling - stay connected even when switching tabs
+    // Page visibility handling - only reconnect if disconnected
     document.addEventListener('visibilitychange', function() {
-      if (document.visibilityState === 'visible') {
-        // Tab became visible - check if we need to reconnect
+      if (document.visibilityState === 'visible' && sessionId) {
         if (!ws || ws.readyState === WebSocket.CLOSED) {
           wasConnected = false;
           reconnectAttempts = 0;
@@ -637,9 +627,9 @@
       }
     });
     
-    // Also try to reconnect on window focus
+    // Reconnect on window focus only if disconnected
     window.addEventListener('focus', function() {
-      if (!ws || ws.readyState === WebSocket.CLOSED) {
+      if (sessionId && (!ws || ws.readyState === WebSocket.CLOSED)) {
         wasConnected = false;
         reconnectAttempts = 0;
         connectWS();
@@ -658,9 +648,14 @@
       try {
         const res = await fetch('/api/messages?channelId=' + channel);
         const data = await res.json();
-        messagesDiv.innerHTML = '';
-        allMessages = [];
-        data.messages.forEach(addMessage);
+        
+        // Only clear and reload if we don't have messages yet
+        if (allMessages.length === 0) {
+          messagesDiv.innerHTML = '';
+          allMessages = [];
+          data.messages.forEach(addMessage);
+        }
+        
         if (currentDm) filterDmMessages(currentDm);
       } catch (e) {
         errorDiv.textContent = 'Load error: ' + e.message;
