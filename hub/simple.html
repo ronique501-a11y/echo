@@ -145,9 +145,9 @@
   </div>
 
   <script>
-    let sessionId = '';
-    let myName = '';
-    let channel = 'default';
+    let sessionId = localStorage.getItem('echoSession') || '';
+    let myName = localStorage.getItem('echoName') || '';
+    let channel = localStorage.getItem('echoChannel') || 'default';
     let ws = null;
     
     const nameInput = document.getElementById('nameInput');
@@ -171,7 +171,9 @@
     let emojiOpen = false;
     let pingInterval = null;
     let awayStatus = false;
-    
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT = 10;
+    let wasConnected = false;
     // Create notification sound
     const notificationSound = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleVw1UJ3b3KqAWT5Nn9vkqH9hRzOV2tyrf2A3R5Xd46t+ZUgvkdvjrXthPjuQ2+GseGI/OI7a4Kt5X0I2i9jeqnlgOz2J1t2nemNDNoTT4Kh3YUA3g9Pfp3VgQzx/0dyncmBEPHzQ36ZzYEVBfNDdpXNgR0GBz9ylcWBHQYPM26RwYElDhM3apHBhSkWGzNikb2JLRIbL16NuYkxGh8jVom1jTUaFx9SgbGNNR4bF0Z5qYU5IhsTPm2lgTkmHws6aaF9PSonDzpdoXE9LicLMlWdaT0yJws2UZ1hPTonCzJJmV09OiMHKkWVWTk6IwcmQZVROTojByZBlVE5OiMHJkGVTTU6IwcmQZVNNTojByZBlU01OiMHJkGVTTU6IwcmQZVNNTojByZBlU01OiMHJkGVTTU6IwcmQZVNNTojByZBlU01OiMHJkGVTTU6IwcmQZVNNTojByZBlU01OiMHJkGVTTU6IwcmQZ');
     
@@ -223,6 +225,11 @@
         if (data.sessionId) {
           sessionId = data.sessionId;
           myName = name;
+          // Save to localStorage for persistence
+          localStorage.setItem('echoSession', sessionId);
+          localStorage.setItem('echoName', myName);
+          localStorage.setItem('echoChannel', channel);
+          document.getElementById('myNameDisplay').textContent = myName;
           statusDiv.textContent = 'Session created!';
           showChat();
           connectWS();
@@ -522,27 +529,40 @@
     }
     
     async function connectWS() {
+      if (!sessionId) return;
+      
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = protocol + '//' + location.host + '/ws?session=' + sessionId;
       
-      statusDiv.textContent = 'Connecting...';
+      if (!wasConnected) {
+        statusDiv.textContent = 'Connecting...';
+      }
       ws = new WebSocket(wsUrl);
       
       ws.onopen = function() {
+        wasConnected = true;
+        reconnectAttempts = 0;
         statusDiv.textContent = 'Connected!';
         statusDiv.style.color = '#4ade80';
         loadMessages();
         loadChannels();
-        setInterval(refreshOnline, 3000);
-        setInterval(refreshBots, 5000);
+        
+        // Clear old intervals
+        if (pingInterval) clearInterval(pingInterval);
+        if (window.onlineInterval) clearInterval(window.onlineInterval);
+        if (window.botsInterval) clearInterval(window.botsInterval);
+        
+        // Set intervals
+        window.onlineInterval = setInterval(refreshOnline, 3000);
+        window.botsInterval = setInterval(refreshBots, 5000);
         refreshBots();
         
-        // Keepalive ping every 30 seconds
+        // Keepalive ping every 25 seconds
         pingInterval = setInterval(() => {
           if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'ping' }));
           }
-        }, 30000);
+        }, 25000);
       };
       
       ws.onmessage = function(e) {
@@ -560,11 +580,10 @@
           if (el) el.querySelector('.msg-content').textContent = data.content;
         }
         if (data.type === 'context') {
-          // Load conversation history
           if (data.data && data.data.history) {
             const historyInfo = document.createElement('div');
             historyInfo.className = 'message system';
-            historyInfo.innerHTML = '<em>--- Loading ' + data.data.history.length + ' previous messages ---</em>';
+            historyInfo.innerHTML = '<em>--- Loaded ' + data.data.history.length + ' previous messages ---</em>';
             messagesDiv.appendChild(historyInfo);
             
             data.data.history.forEach(h => {
@@ -582,18 +601,50 @@
       };
       
       ws.onerror = function() {
-        errorDiv.textContent = 'Connection error, reconnecting...';
+        if (!wasConnected) {
+          errorDiv.textContent = 'Connection error';
+        }
       };
       
       ws.onclose = function(e) {
         if (pingInterval) clearInterval(pingInterval);
-        if (e.code !== 1000) {
-          statusDiv.textContent = 'Disconnected, reconnecting...';
+        
+        // Don't show reconnect message if we were never connected
+        if (wasConnected && e.code !== 1000) {
+          statusDiv.textContent = 'Reconnecting...';
           statusDiv.style.color = '#ff6b6b';
-          setTimeout(connectWS, 2000);
+          
+          // Exponential backoff
+          reconnectAttempts++;
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+          setTimeout(connectWS, delay);
+        } else if (!wasConnected && sessionId) {
+          // Silent reconnect attempt
+          setTimeout(connectWS, 1000);
         }
       };
     }
+    
+    // Page visibility handling - stay connected even when switching tabs
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible') {
+        // Tab became visible - check if we need to reconnect
+        if (!ws || ws.readyState === WebSocket.CLOSED) {
+          wasConnected = false;
+          reconnectAttempts = 0;
+          connectWS();
+        }
+      }
+    });
+    
+    // Also try to reconnect on window focus
+    window.addEventListener('focus', function() {
+      if (!ws || ws.readyState === WebSocket.CLOSED) {
+        wasConnected = false;
+        reconnectAttempts = 0;
+        connectWS();
+      }
+    });
     
     async function refreshOnline() {
       try {
@@ -634,9 +685,21 @@
     window.switchChannel = function(channelId) {
       currentDm = null;
       channel = channelId;
+      localStorage.setItem('echoChannel', channel);
       document.getElementById('channelTitle').textContent = '#' + channelId;
       document.getElementById('channelTitle').style.color = '#00d9ff';
       loadMessages();
+    }
+    
+    // Auto-login if we have saved session
+    if (sessionId && myName) {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('chatScreen').style.display = 'flex';
+      document.getElementById('myNameDisplay').textContent = myName;
+      document.getElementById('channelTitle').textContent = '#' + channel;
+      wasConnected = false;
+      reconnectAttempts = 0;
+      connectWS();
     }
   </script>
 </body>
